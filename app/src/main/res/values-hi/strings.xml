@@ -3,7 +3,33 @@
     <string name="menu_language">भाषा</string>
     <string name="menu_about">के बारे में</string>
     <string name="about_title">Game Booster के बारे में</string>
-    <string name="about_description">यह एप्लिकेशन आपको प्रदर्शन में सुधार करने के लिए अपने गेम के लिए कस्टम रिज़ॉल्यूशन और घनत्व प्रोफाइल बनाने की अनुमति देता है।\n\nमहत्वपूर्ण: Shizuku सक्रिय होना चाहिए। ऐप सुरक्षित रूप से सिस्टम कमांड निष्पादित करने के लिए Shizuku द्वारा प्रदान किए गए अस्थायी रूट विशेषाधिकारों का उपयोग करता है।\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="about_description">यह एप्लिकेशन आपको गेम के लिए कस्टम रिज़ॉल्यूशन और घनत्व प्रोफाइल बनाने की अनुमति देता है। महत्वपूर्ण: Shizuku सक्रिय होना चाहिए। by TechViva liclopes@gmail.com</string>
     <string name="ok">ठीक है</string>
+    <string name="cancel">रद्द करें</string>
     <string name="language_dialog_title">भाषा चुनें</string>
+    
+    <string name="tab_games">गेम्स</string>
+    <string name="tab_background">बैकग्राउंड ऐप्स</string>
+    <string name="tab_boost_settings">बूस्ट सेटिंग्स</string>
+    <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="menu_enable_thermal">Thermal monitor चालू करें</string>
+    <string name="menu_disable_thermal">Thermal monitor बंद करें</string>
+    <string name="thermal_monitor_warning">वैकल्पिक सुविधा: तापमान जांच सक्रिय है। रैम और बैटरी बचाने के लिए आप इसे मेनू से बंद कर सकते हैं।</string>
+    <string name="thermal_monitor_header">डिवाइस का तापमान</string>
+
+    <string name="boost_thermal_title">थर्मल सीमा अक्षम करें</string>
+    <string name="boost_thermal_desc">तापमान के कारण CPU/GPU की गति कम होने से रोकता है।</string>
+    <string name="boost_overlay_title">हार्डवेयर ओवरले अक्षम करें</string>
+    <string name="boost_overlay_desc">गेम को GPU रेंडरिंग का सीधा एक्सेस देने के लिए ओवरले बंद करता है।</string>
+    <string name="boost_cache_title">ऑटो कैश सफाई</string>
+    <string name="boost_cache_desc">गेम शुरू होने से पहले कैश साफ़ करता है।</string>
+    <string name="boost_oom_title">OOM किलर अमर मोड</string>
+    <string name="boost_oom_desc">सिस्टम द्वारा गेम को बैकग्राउंड में बंद होने से बचाता है।</string>
+    <string name="boost_adblock_title">गेम विज्ञापन अवरोधक (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">Shizuku Private DNS का उपयोग करके विज्ञापनों को ब्लॉक करता है।</string>
+
+    <string name="ad_scan_button">विज्ञापन जांचें</string>
+    <string name="ad_scan_title">गेम विज्ञापन निरीक्षक</string>
+    <string name="ad_scan_clean">कोई विज्ञापन नेटवर्क नहीं मिला। गेम स्वच्छ है।</string>
+    <string name="ad_scan_detected">पाए गए विज्ञापन SDK:</string>
 </resources>

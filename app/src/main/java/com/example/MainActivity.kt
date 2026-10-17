@@ -1,21 +1,33 @@
 package com.example
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import rikka.shizuku.Shizuku
 
@@ -27,9 +39,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        // Handle notification permission result
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.applySavedLocale(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        LocaleHelper.applySavedLocale(this)
         super.onCreate(savedInstanceState)
         ShizukuHelper.registerPermissionListener(permissionListener)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -45,48 +75,117 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun ShizukuStatusBadge() {
+    val isActive = remember { mutableStateOf(ShizukuHelper.hasPermission()) }
+    LaunchedEffect(Unit) {
+        isActive.value = ShizukuHelper.hasPermission()
+    }
+
+    Surface(
+        color = if (isActive.value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            text = if (isActive.value) "Shizuku: ON" else "Shizuku: OFF",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            color = if (isActive.value) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: GameViewModel = viewModel()) {
-    val dashboardEnabled by viewModel.dashboardEnabled.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = mutableListOf("Games", "Background Apps", "Boost Settings")
-    if (dashboardEnabled) tabs.add(0, "Dashboard")
-    
+    val context = LocalContext.current
+    val thermalMonitorEnabled by viewModel.thermalMonitorEnabled.collectAsState()
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    val baseTabs = listOf(
+        stringResource(id = R.string.tab_games),
+        stringResource(id = R.string.tab_background),
+        stringResource(id = R.string.tab_boost_settings),
+        stringResource(id = R.string.tab_image_optimizer)
+    )
+
+    val tabs = if (thermalMonitorEnabled) {
+        listOf(stringResource(id = R.string.tab_thermal_monitor)) + baseTabs
+    } else {
+        baseTabs
+    }
+
+    val activeIndex = selectedTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
+
     var showMenu by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Game Booster") },
+            title = { Text(stringResource(id = R.string.app_name)) },
             actions = {
+                ShizukuStatusBadge()
+                Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Menu")
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(id = R.string.menu_language)) }, onClick = { showLanguageDialog = true; showMenu = false })
-                    DropdownMenuItem(text = { Text(stringResource(id = R.string.menu_about)) }, onClick = { showAbout = true; showMenu = false })
-                    DropdownMenuItem(text = { Text(if (dashboardEnabled) "Disable Dashboard" else "Enable Dashboard") }, onClick = { viewModel.dashboardEnabled.value = !dashboardEnabled; showMenu = false })
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.menu_language)) },
+                        onClick = {
+                            showLanguageDialog = true
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (thermalMonitorEnabled) {
+                                    stringResource(id = R.string.menu_disable_thermal)
+                                } else {
+                                    stringResource(id = R.string.menu_enable_thermal)
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.toggleThermalMonitor(!thermalMonitorEnabled)
+                            showMenu = false
+                            selectedTabIndex = 0
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.menu_about)) },
+                        onClick = {
+                            showAbout = true
+                            showMenu = false
+                        }
+                    )
                 }
             }
         )
-        
-        TabRow(selectedTabIndex = selectedTab) {
+
+        ScrollableTabRow(
+            selectedTabIndex = activeIndex,
+            edgePadding = 16.dp
+        ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
+                    selected = activeIndex == index,
+                    onClick = { selectedTabIndex = index },
                     text = { Text(title) }
                 )
             }
         }
 
-        when (tabs[selectedTab]) {
-            "Dashboard" -> DashboardTab(viewModel)
-            "Games" -> GameListTab(viewModel)
-            "Background Apps" -> BackgroundAppsTab(viewModel)
-            "Boost Settings" -> BoostSettingsTab(viewModel)
+        val currentTabTitle = tabs.getOrNull(activeIndex) ?: ""
+        when {
+            thermalMonitorEnabled && activeIndex == 0 -> ThermalMonitorTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_games) -> GameListTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_background) -> BackgroundAppsTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_image_optimizer) -> ImageOptimizerTab(viewModel)
+            else -> GameListTab(viewModel)
         }
     }
 
@@ -104,18 +203,51 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     }
 
     if (showLanguageDialog) {
+        val currentLang = remember { LocaleHelper.getSavedLanguage(context) }
         AlertDialog(
             onDismissRequest = { showLanguageDialog = false },
             title = { Text(stringResource(id = R.string.language_dialog_title)) },
             text = {
-                Column {
-                    Text(stringResource(id = R.string.language_en), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_pt), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                    items(LocaleHelper.SUPPORTED_LANGUAGES) { langItem ->
+                        val isSelected = currentLang.equals(langItem.code, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    LocaleHelper.setLocale(context, langItem.code)
+                                    showLanguageDialog = false
+                                    (context as? Activity)?.recreate()
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = langItem.nativeName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = langItem.displayName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showLanguageDialog = false }) {
-                    Text(stringResource(id = R.string.ok))
+                    Text(stringResource(id = R.string.cancel))
                 }
             }
         )
@@ -123,12 +255,156 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
 }
 
 @Composable
-fun DashboardTab(viewModel: GameViewModel) {
+fun ThermalMonitorTab(viewModel: GameViewModel) {
     val temp by viewModel.temperature.collectAsState()
+    val mem by viewModel.memoryUsage.collectAsState()
+
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Device Temperature: ${String.format("%.1f", temp)}°C", style = MaterialTheme.typography.headlineMedium)
-        // Simplified visual indicator
-        LinearProgressIndicator(progress = { (temp / 100f).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(20.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(id = R.string.thermal_monitor_header),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                val tempText = if (temp > 0f) String.format("Battery Temp: %.1f°C", temp) else "Battery Temp: --°C"
+                val memText = if (mem > 0f) String.format("Memory Usage: %.1f%%", mem) else "Memory Usage: --%"
+
+                Text(
+                    text = tempText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = when {
+                        temp >= 45f -> MaterialTheme.colorScheme.error
+                        temp >= 38f -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = memText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { (temp / 80f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f))
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(id = R.string.thermal_monitor_warning),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ImageOptimizerTab(viewModel: GameViewModel) {
+    val inspectedImage by viewModel.inspectedImage.collectAsState()
+    val compressedFile by viewModel.compressedImageFile.collectAsState()
+    var makePermanent by remember { mutableStateOf(false) }
+    var successMsg by remember { mutableStateOf(false) }
+
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.inspectSelectedImage(uri)
+            successMsg = false
+        }
+    }
+
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            text = stringResource(id = R.string.img_opt_title),
+            style = MaterialTheme.typography.titleLarge
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = { pickImageLauncher.launch("image/*") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(id = R.string.img_opt_pick))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (inspectedImage != null) {
+            val img = inspectedImage!!
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Resolution: ${img.width} x ${img.height}", style = MaterialTheme.typography.bodyLarge)
+                    Text("Quality Category: ${img.category}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("File Size: ${img.sizeBytes / 1024} KB", style = MaterialTheme.typography.bodySmall)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = makePermanent,
+                            onCheckedChange = { makePermanent = it }
+                        )
+                        Text(stringResource(id = R.string.img_opt_permanent))
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.compressImageToSd(img.uri, makePermanent)
+                            successMsg = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.img_opt_compress))
+                    }
+                }
+            }
+        }
+
+        if (successMsg && compressedFile != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.img_opt_success),
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
     }
 }
 
@@ -137,52 +413,286 @@ fun GameListTab(viewModel: GameViewModel) {
     val games by viewModel.games.collectAsState()
     var selectedGame by remember { mutableStateOf<GameApp?>(null) }
     var showDialog by remember { mutableStateOf(false) }
+    var adScanResult by remember { mutableStateOf<AdBlockHelper.AdScanResult?>(null) }
+    var compactResultMsg by remember { mutableStateOf<String?>(null) }
+
+    var showManualAddDialog by remember { mutableStateOf(false) }
+    var manualPkg by remember { mutableStateOf("") }
+    var manualName by remember { mutableStateOf("") }
+
+    var customResolutionInput by remember { mutableStateOf("1280x720") }
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         item {
-            Text(text = "Native Res: ${viewModel.nativeResolution}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = {
-                if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
-                    ShizukuHelper.requestPermission()
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Native Resolution",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                text = viewModel.nativeResolution,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Button(onClick = {
+                            if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
+                                ShizukuHelper.requestPermission()
+                            }
+                        }) {
+                            Text(
+                                if (ShizukuHelper.hasPermission()) "Shizuku Active" else "Authorize Shizuku"
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showManualAddDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Add Manually")
+                        }
+                        Button(
+                            onClick = { viewModel.autoScanAndAddGames() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Auto Scan")
+                        }
+                    }
                 }
-            }) {
-                Text("Initialize Shizuku")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        items(games) { game ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable {
+                        if (ShizukuHelper.hasPermission()) {
+                            selectedGame = game
+                            customResolutionInput = game.profile?.resolution ?: "1280x720"
+                            showDialog = true
+                        }
+                    }
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = game.name,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    val res = game.profile?.resolution ?: viewModel.nativeResolution
+                    Text(
+                        text = "Res: $res",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val count = viewModel.compactGameImages(game.packageName)
+                                compactResultMsg = if (count > 0) {
+                                    String.format(java.util.Locale.getDefault(), "Images compressed successfully (%d optimized).", count)
+                                } else {
+                                    "No large images found."
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Compact Images")
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                adScanResult = viewModel.scanGameAds(game.packageName)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Ads")
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        Button(
+                            onClick = { viewModel.launchGame(game.packageName) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text("Launch")
+                        }
+                    }
+                }
             }
         }
-        items(games) { game ->
-            ListItem(
-                modifier = Modifier.clickable {
-                    if (ShizukuHelper.hasPermission()) {
-                        selectedGame = game
-                        showDialog = true
-                    }
-                },
-                headlineContent = { Text(game.name) },
-                supportingContent = { 
-                    val res = game.profile?.resolution ?: viewModel.nativeResolution
-                    Text("Res: $res") 
-                },
-                trailingContent = {
-                    TextButton(onClick = { viewModel.launchGame(game.packageName) }) {
-                        Text("Launch")
-                    }
+    }
+
+    if (showManualAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualAddDialog = false },
+            title = { Text("Add Game Manually") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = manualName,
+                        onValueChange = { manualName = it },
+                        label = { Text("App Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = manualPkg,
+                        onValueChange = { manualPkg = it },
+                        label = { Text("Package Name (e.g. com.game)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-            )
-        }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (manualPkg.isNotBlank() && manualName.isNotBlank()) {
+                        viewModel.addManualGame(manualPkg.trim(), manualName.trim())
+                        manualPkg = ""
+                        manualName = ""
+                        showManualAddDialog = false
+                    }
+                }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualAddDialog = false }) {
+                    Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (compactResultMsg != null) {
+        AlertDialog(
+            onDismissRequest = { compactResultMsg = null },
+            title = { Text("Image Compactor") },
+            text = { Text(compactResultMsg!!) },
+            confirmButton = {
+                TextButton(onClick = { compactResultMsg = null }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
     }
 
     if (showDialog && selectedGame != null) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("Edit Profile: ${selectedGame?.name}") },
-            text = { Text("Tap to simulate save (1080x1920, 480dpi)") },
+            title = { Text("Resolution Profile: ${selectedGame?.name}") },
+            text = {
+                Column {
+                    Text("Test resolution live before saving permanently:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customResolutionInput,
+                        onValueChange = { customResolutionInput = it },
+                        label = { Text("Resolution (Width x Height e.g. 1280x720)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.testResolutionLive(customResolutionInput.trim()) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Test Live")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.resetResolutionLive() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.saveProfile(selectedGame!!.packageName, "1080x1920", 480)
+                    val parts = customResolutionInput.trim().split("x")
+                    if (parts.size == 2) {
+                        viewModel.saveProfile(selectedGame!!.packageName, customResolutionInput.trim(), 320)
+                    }
                     showDialog = false
                 }) {
-                    Text("Save")
+                    Text("Save Permanently")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (adScanResult != null) {
+        val result = adScanResult!!
+        AlertDialog(
+            onDismissRequest = { adScanResult = null },
+            title = { Text(stringResource(id = R.string.ad_scan_title)) },
+            text = {
+                Column {
+                    if (result.hasAds) {
+                        Text(
+                            text = stringResource(id = R.string.ad_scan_detected),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        result.detectedNetworks.forEach { network ->
+                            Text(
+                                text = "• $network",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(id = R.string.ad_scan_clean),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { adScanResult = null }) {
+                    Text(stringResource(id = R.string.ok))
                 }
             }
         )
@@ -192,6 +702,11 @@ fun GameListTab(viewModel: GameViewModel) {
 @Composable
 fun BackgroundAppsTab(viewModel: GameViewModel) {
     val backgroundApps by viewModel.backgroundApps.collectAsState()
+    var killAlertMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.scanBackgroundApps()
+    }
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         items(backgroundApps) { app ->
@@ -200,12 +715,32 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
                 supportingContent = { Text("Mem: ${app.memUsage}") },
                 trailingContent = {
                     Row {
-                        TextButton(onClick = { viewModel.killApp(app.packageName) }) { Text("Kill") }
+                        TextButton(onClick = {
+                            val success = viewModel.killApp(app.packageName)
+                            killAlertMsg = if (success) {
+                                "Application terminated successfully."
+                            } else {
+                                "Unable to terminate application."
+                            }
+                        }) { Text("Kill") }
                         TextButton(onClick = { viewModel.freezeApp(app.packageName) }) { Text("Freeze") }
                     }
                 }
             )
         }
+    }
+
+    if (killAlertMsg != null) {
+        AlertDialog(
+            onDismissRequest = { killAlertMsg = null },
+            title = { Text("App Control") },
+            text = { Text(killAlertMsg!!) },
+            confirmButton = {
+                TextButton(onClick = { killAlertMsg = null }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
     }
 }
 
@@ -215,14 +750,72 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     val disableOverlays by viewModel.disableOverlays.collectAsState()
     val autoClearCache by viewModel.autoClearCache.collectAsState()
     val oomImmortal by viewModel.oomImmortal.collectAsState()
+    val adBlockerEnabled by viewModel.adBlockerEnabled.collectAsState()
+    val adBlockerRealtime by viewModel.adBlockerRealtime.collectAsState()
 
     var showInfoDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     Column(modifier = Modifier.padding(16.dp)) {
-        SettingItem("Thermal Limit Disable", thermalBoost, { viewModel.thermalBoost.value = it }, R.string.boost_thermal_title, R.string.boost_thermal_desc, { showInfoDialog = it })
-        SettingItem("Disable Hardware Overlays", disableOverlays, { viewModel.disableOverlays.value = it }, R.string.boost_overlay_title, R.string.boost_overlay_desc, { showInfoDialog = it })
-        SettingItem("Auto Clear Cache", autoClearCache, { viewModel.autoClearCache.value = it }, R.string.boost_cache_title, R.string.boost_cache_desc, { showInfoDialog = it })
-        SettingItem("OOM Killer Immortal", oomImmortal, { viewModel.oomImmortal.value = it }, R.string.boost_oom_title, R.string.boost_oom_desc, { showInfoDialog = it })
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+        ) {
+            Text(
+                text = stringResource(id = R.string.boost_warning_note),
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+        }
+
+        SettingItem(
+            title = stringResource(id = R.string.boost_adblock_title),
+            checked = adBlockerEnabled,
+            onCheckedChange = { viewModel.toggleAdBlocker(it) },
+            titleRes = R.string.boost_adblock_title,
+            descRes = R.string.boost_adblock_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = "Real-time Background Ad Monitoring",
+            checked = adBlockerRealtime,
+            onCheckedChange = { viewModel.toggleAdBlockerRealtime(it) },
+            titleRes = R.string.boost_adblock_title,
+            descRes = R.string.boost_adblock_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_thermal_title),
+            checked = thermalBoost,
+            onCheckedChange = { viewModel.thermalBoost.value = it },
+            titleRes = R.string.boost_thermal_title,
+            descRes = R.string.boost_thermal_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_overlay_title),
+            checked = disableOverlays,
+            onCheckedChange = { viewModel.disableOverlays.value = it },
+            titleRes = R.string.boost_overlay_title,
+            descRes = R.string.boost_overlay_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_cache_title),
+            checked = autoClearCache,
+            onCheckedChange = { viewModel.autoClearCache.value = it },
+            titleRes = R.string.boost_cache_title,
+            descRes = R.string.boost_cache_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_oom_title),
+            checked = oomImmortal,
+            onCheckedChange = { viewModel.oomImmortal.value = it },
+            titleRes = R.string.boost_oom_title,
+            descRes = R.string.boost_oom_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
     }
 
     if (showInfoDialog != null) {
@@ -230,25 +823,32 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
             onDismissRequest = { showInfoDialog = null },
             title = { Text(showInfoDialog!!.first) },
             text = { Text(showInfoDialog!!.second) },
-            confirmButton = { TextButton(onClick = { showInfoDialog = null }) { Text("OK") } }
+            confirmButton = { TextButton(onClick = { showInfoDialog = null }) { Text(stringResource(id = R.string.ok)) } }
         )
     }
 }
 
 @Composable
-fun SettingItem(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, titleRes: Int, descRes: Int, onInfoClick: (Pair<String, String>) -> Unit) {
+fun SettingItem(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    titleRes: Int,
+    descRes: Int,
+    onInfoClick: (Pair<String, String>) -> Unit
+) {
     val t = stringResource(id = titleRes)
     val d = stringResource(id = descRes)
     ListItem(
         headlineContent = { Text(title) },
-        leadingContent = { 
+        leadingContent = {
             IconButton(onClick = { onInfoClick(t to d) }) {
                 Icon(Icons.Default.Info, contentDescription = "Info")
             }
         },
-        trailingContent = { 
+        trailingContent = {
             Switch(
-                checked = checked, 
+                checked = checked,
                 onCheckedChange = { newValue ->
                     if (newValue && !ShizukuHelper.hasPermission()) {
                         ShizukuHelper.requestPermission()
@@ -256,7 +856,7 @@ fun SettingItem(title: String, checked: Boolean, onCheckedChange: (Boolean) -> U
                         onCheckedChange(newValue)
                     }
                 }
-            ) 
+            )
         }
     )
 }

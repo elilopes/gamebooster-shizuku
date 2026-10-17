@@ -3,7 +3,33 @@
     <string name="menu_language">语言</string>
     <string name="menu_about">关于</string>
     <string name="about_title">关于 Game Booster</string>
-    <string name="about_description">此应用程序允许您为游戏创建自定义分辨率和密度配置文件，以提高性能。\n\n重要提示：必须激活 Shizuku。该应用程序利用 Shizuku 提供的临时 root 权限来安全地执行系统命令。\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="about_description">此应用程序允许您为游戏创建自定义分辨率和密度配置文件，以提高性能。重要提示：必须激活 Shizuku。该应用程序利用 Shizuku 提供的临时 root 权限来安全地执行系统命令。by TechViva liclopes@gmail.com</string>
     <string name="ok">确定</string>
+    <string name="cancel">取消</string>
     <string name="language_dialog_title">选择语言</string>
+    
+    <string name="tab_games">游戏</string>
+    <string name="tab_background">后台应用</string>
+    <string name="tab_boost_settings">加速设置</string>
+    <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="menu_enable_thermal">启用 Thermal monitor</string>
+    <string name="menu_disable_thermal">停用 Thermal monitor</string>
+    <string name="thermal_monitor_warning">可选功能：正在持续轮询温度。您可以随时在菜单中关闭此标签页以节省内存和电量。</string>
+    <string name="thermal_monitor_header">设备温度</string>
+
+    <string name="boost_thermal_title">禁用温控限制</string>
+    <string name="boost_thermal_desc">禁用发热降频，防止设备变热时系统降低 CPU/GPU 频率。</string>
+    <string name="boost_overlay_title">停用硬件叠加层</string>
+    <string name="boost_overlay_desc">停用硬件叠加层，让游戏能够直接使用 GPU 渲染。</string>
+    <string name="boost_cache_title">自动清理缓存</string>
+    <string name="boost_cache_desc">在启动游戏前自动清除游戏缓存目录，保持运行环境清爽。</string>
+    <string name="boost_oom_title">OOM 防杀机制</string>
+    <string name="boost_oom_desc">锁定游戏进程优先级，防止在后台被系统 OOM Killer 强行关闭。</string>
+    <string name="boost_adblock_title">游戏广告拦截器 (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">使用 Shizuku Private DNS 在系统级拦截游戏中的广告网络（AdMob、Unity Ads、AppLovin 等）。</string>
+
+    <string name="ad_scan_button">检测广告</string>
+    <string name="ad_scan_title">游戏广告检测器</string>
+    <string name="ad_scan_clean">在此应用中未检测到已知广告 SDK，游戏很干净。</string>
+    <string name="ad_scan_detected">在游戏中检测到的广告 SDK：</string>
 </resources>

@@ -3,7 +3,33 @@
     <string name="menu_language">언어</string>
     <string name="menu_about">정보</string>
     <string name="about_title">Game Booster 정보</string>
-    <string name="about_description">이 애플리케이션을 사용하면 게임에 대한 사용자 지정 해상도 및 밀도 프로필을 만들어 성능을 향상시킬 수 있습니다.\n\n중요: Shizuku가 활성화되어 있어야 합니다. 이 앱은 Shizuku가 제공하는 임시 루트 권한을 사용하여 시스템 명령을 안전하게 실행합니다.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="about_description">이 애플리케이션을 사용하면 게임에 대한 사용자 지정 해상도 및 밀도 프로필을 만들어 성능을 향상시킬 수 있습니다. 중요: Shizuku가 활성화되어 있어야 합니다. 이 앱은 Shizuku가 제공하는 임시 루트 권한을 사용하여 시스템 명령을 안전하게 실행합니다. by TechViva liclopes@gmail.com</string>
     <string name="ok">확인</string>
+    <string name="cancel">취소</string>
     <string name="language_dialog_title">언어 선택</string>
+    
+    <string name="tab_games">게임</string>
+    <string name="tab_background">백그라운드 앱</string>
+    <string name="tab_boost_settings">부스트 설정</string>
+    <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="menu_enable_thermal">Thermal monitor 활성화</string>
+    <string name="menu_disable_thermal">Thermal monitor 비활성화</string>
+    <string name="thermal_monitor_warning">선택 기능: 실시간 온도 조회가 작동 중입니다. 메모리와 배터리를 절약하려면 메뉴에서 언제든지 비활성화할 수 있습니다.</string>
+    <string name="thermal_monitor_header">기기 온도</string>
+
+    <string name="boost_thermal_title">발열 제한 비활성화</string>
+    <string name="boost_thermal_desc">발열 스로틀링을 비활성화하여 기기가 뜨거워져도 CPU/GPU 클럭이 낮아지지 않도록 합니다.</string>
+    <string name="boost_overlay_title">하드웨어 오버레이 비활성화</string>
+    <string name="boost_overlay_desc">하드웨어 오버레이를 꺼서 게임이 GPU 렌더링에 직접 액세스하도록 합니다.</string>
+    <string name="boost_cache_title">캐시 자동 정리</string>
+    <string name="boost_cache_desc">게임 실행 전 자동으로 캐시를 정리하여 쾌적한 상태로 시작합니다.</string>
+    <string name="boost_oom_title">OOM Killer 불사 모드</string>
+    <string name="boost_oom_desc">게임 프로세스 우선순위를 고정하여 백그라운드에서 강제 종료되지 않도록 보호합니다.</string>
+    <string name="boost_adblock_title">게임 광고 차단기 (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">Shizuku Private DNS를 사용하여 게임 내 광고(AdMob, Unity Ads, AppLovin)를 시스템 수준에서 차단합니다.</string>
+
+    <string name="ad_scan_button">광고 검사</string>
+    <string name="ad_scan_title">게임 광고 분석기</string>
+    <string name="ad_scan_clean">알려진 광고 네트워크가 감지되지 않았습니다. 깨끗한 게임입니다.</string>
+    <string name="ad_scan_detected">감지된 광고 SDK 목록:</string>
 </resources>

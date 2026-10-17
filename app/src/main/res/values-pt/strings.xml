@@ -5,8 +5,19 @@
     <string name="about_title">Sobre o Game Booster</string>
     <string name="about_description">Este aplicativo permite criar perfis personalizados de resolução e densidade para seus jogos, melhorando o desempenho. IMPORTANTE: É obrigatório que o Shizuku esteja ativado. O aplicativo utiliza os privilégios temporários de root fornecidos pelo Shizuku para executar comandos de sistema com segurança. by TechViva liclopes@gmail.com</string>
     <string name="ok">OK</string>
+    <string name="cancel">Cancelar</string>
     <string name="language_dialog_title">Selecionar Idioma</string>
     
+    <string name="tab_games">Jogos</string>
+    <string name="tab_background">Apps em 2º Plano</string>
+    <string name="tab_boost_settings">Ajustes Boost</string>
+    <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Otimizador de Imagens</string>
+    <string name="menu_enable_thermal">Ativar Thermal monitor</string>
+    <string name="menu_disable_thermal">Desativar Thermal monitor</string>
+    <string name="thermal_monitor_warning">Função opcional: Monitoramento contínuo ativo. Você pode desativar esta aba pelo menu a qualquer momento para economizar memória RAM e bateria.</string>
+    <string name="thermal_monitor_header">Temperatura do Dispositivo</string>
+
     <string name="boost_thermal_title">Desativar Limite Térmico</string>
     <string name="boost_thermal_desc">Desativa a limitação térmica para evitar que o sistema reduza a velocidade da CPU/GPU quando o dispositivo aquece.</string>
     <string name="boost_overlay_title">Desativar Overlays de Hardware</string>
@@ -15,4 +26,25 @@
     <string name="boost_cache_desc">Limpa automaticamente o diretório de cache do jogo antes de iniciar, garantindo um início limpo.</string>
     <string name="boost_oom_title">OOM Killer Imortal</string>
     <string name="boost_oom_desc">Define a prioridade do processo do jogo para ser imune ao OOM Killer do Android, evitando que ele seja fechado em segundo plano.</string>
+    <string name="boost_adblock_title">Bloqueador de Propaganda (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">Bloqueia redes de anúncio em jogos (Google AdMob, Unity Ads, AppLovin) em nível de sistema usando Private DNS via Shizuku.</string>
+    <string name="boost_warning_note">Nota: algumas configurações de aceleração podem superaquecer o aparelho.</string>
+
+    <string name="ad_scan_button">Verificar Ads</string>
+    <string name="ad_scan_title">Inspetor de Propaganda do Jogo</string>
+    <string name="ad_scan_clean">Nenhuma rede de propaganda detectada neste jogo. Jogo limpo.</string>
+    <string name="ad_scan_detected">SDKs de anúncio detectadas neste jogo:</string>
+
+    <string name="img_opt_title">Inspetor &amp; Compactador de Imagens SD</string>
+    <string name="img_opt_pick">Selecionar Imagem (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">Compactar para SD</string>
+    <string name="img_opt_permanent">Tornar compactação permanente</string>
+    <string name="img_opt_success">Imagem compactada para SD e salva com sucesso!</string>
+
+    <string name="img_compact_btn">Compact Images</string>
+    <string name="img_compact_success">Imagens compactadas com sucesso (%d imagens otimizadas).</string>
+    <string name="img_compact_none">Nenhuma imagem grande encontrada.</string>
+
+    <string name="kill_success">Aplicativo finalizado com sucesso.</string>
+    <string name="kill_fail">Impossível finalizar o aplicativo.</string>
 </resources>

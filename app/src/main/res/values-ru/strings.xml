@@ -3,7 +3,33 @@
     <string name="menu_language">Язык</string>
     <string name="menu_about">О приложении</string>
     <string name="about_title">О Game Booster</string>
-    <string name="about_description">Это приложение позволяет создавать пользовательские профили разрешения и плотности для ваших игр, чтобы повысить производительность.\n\nВАЖНО: Shizuku должен быть активирован. Приложение использует временные права root, предоставляемые Shizuku, для безопасного выполнения системных команд.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="about_description">Это приложение позволяет создавать пользовательские профили разрешения и плотности для ваших игр, чтобы повысить производительность. ВАЖНО: Shizuku должен быть активирован. Приложение использует временные права root, предоставляемые Shizuku, для безопасного выполнения системных команд. by TechViva liclopes@gmail.com</string>
     <string name="ok">OK</string>
+    <string name="cancel">Отмена</string>
     <string name="language_dialog_title">Выберите язык</string>
+    
+    <string name="tab_games">Игры</string>
+    <string name="tab_background">Фоновые приложения</string>
+    <string name="tab_boost_settings">Настройки Boost</string>
+    <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="menu_enable_thermal">Включить Thermal monitor</string>
+    <string name="menu_disable_thermal">Отключить Thermal monitor</string>
+    <string name="thermal_monitor_warning">Дополнительная функция: работает периодический опрос. Вы можете отключить эту вкладку в меню для экономии оперативной памяти и батареи.</string>
+    <string name="thermal_monitor_header">Температура устройства</string>
+
+    <string name="boost_thermal_title">Отключение терморегулирования</string>
+    <string name="boost_thermal_desc">Отключает ограничение температуры, чтобы система не снижала частоту процессора и видеочипа при нагреве.</string>
+    <string name="boost_overlay_title">Отключить аппаратные наложения</string>
+    <string name="boost_overlay_desc">Отключает аппаратные наложения для прямого доступа игры к GPU.</string>
+    <string name="boost_cache_title">Автоочистка кэша</string>
+    <string name="boost_cache_desc">Автоматически очищает кэш игры перед запуском для чистого старта.</string>
+    <string name="boost_oom_title">Бессмертие в OOM Killer</string>
+    <string name="boost_oom_desc">Задает приоритет процесса игры, защищая ее от закрытия системой при нехватке памяти.</string>
+    <string name="boost_adblock_title">Блокировщик рекламы (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">Блокирует рекламные сети в играх (AdMob, Unity Ads, AppLovin) на уровне системы через Private DNS.</string>
+
+    <string name="ad_scan_button">Проверить рекламу</string>
+    <string name="ad_scan_title">Анализатор рекламы игры</string>
+    <string name="ad_scan_clean">В этом приложении не обнаружено известных рекламных сетей.</string>
+    <string name="ad_scan_detected">Обнаружены рекламные SDK в игре:</string>
 </resources>

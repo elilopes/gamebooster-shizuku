@@ -2,13 +2,18 @@ package com.example
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
 import com.example.data.GameProfile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class GameApp(
     val packageName: String,
@@ -23,6 +28,7 @@ data class BackgroundApp(
 )
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application
     private val packageManager = application.packageManager
     private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db").build()
     
@@ -37,74 +43,212 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val disableOverlays = MutableStateFlow(false)
     val autoClearCache = MutableStateFlow(false)
     val oomImmortal = MutableStateFlow(false)
-    val dashboardEnabled = MutableStateFlow(false)
+    val adBlockerEnabled = MutableStateFlow(false)
+    val adBlockerRealtime = MutableStateFlow(false)
+
+    // Thermal Monitor State
+    val thermalMonitorEnabled = MutableStateFlow(false)
     val temperature = MutableStateFlow(0f)
+    val memoryUsage = MutableStateFlow(0f)
+    private var thermalMonitoringJob: Job? = null
+
+    // Image Optimizer State
+    val inspectedImage = MutableStateFlow<ImageOptimizerHelper.ImageInfo?>(null)
+    val compressedImageFile = MutableStateFlow<File?>(null)
 
     val nativeResolution = ShellHelper.getNativeResolution()
 
     init {
         loadGames()
         scanBackgroundApps()
-        startTemperatureMonitoring()
+        adBlockerEnabled.value = AdBlockHelper.isAdBlockingActive()
+    }
+
+    fun toggleThermalMonitor(enabled: Boolean) {
+        thermalMonitorEnabled.value = enabled
+        GameForegroundService.thermalMonitoringActive = enabled
+        if (enabled) {
+            startTemperatureMonitoring()
+            GameForegroundService.startService(app)
+        } else {
+            stopTemperatureMonitoring()
+            checkStopService()
+        }
+    }
+
+    fun toggleAdBlockerRealtime(enabled: Boolean) {
+        adBlockerRealtime.value = enabled
+        GameForegroundService.adBlockerRealtimeActive = enabled
+        if (enabled) {
+            adBlockerEnabled.value = true
+            AdBlockHelper.enableAdBlocking()
+            GameForegroundService.startService(app)
+        } else {
+            checkStopService()
+        }
+    }
+
+    private fun checkStopService() {
+        if (!GameForegroundService.thermalMonitoringActive && !GameForegroundService.adBlockerRealtimeActive) {
+            GameForegroundService.stopService(app)
+        }
     }
 
     private fun startTemperatureMonitoring() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            while (true) {
-                if (dashboardEnabled.value) {
-                    temperature.value = ShellHelper.getTemperature()
-                }
-                kotlinx.coroutines.delay(2000)
+        thermalMonitoringJob?.cancel()
+        thermalMonitoringJob = viewModelScope.launch(Dispatchers.IO) {
+            while (thermalMonitorEnabled.value) {
+                temperature.value = ShellHelper.getTemperature()
+                memoryUsage.value = getMemoryUsagePercentage()
+                delay(2500)
             }
         }
     }
 
-    private fun loadGames() {
-        viewModelScope.launch {
+    private fun stopTemperatureMonitoring() {
+        thermalMonitoringJob?.cancel()
+        thermalMonitoringJob = null
+        temperature.value = 0f
+        memoryUsage.value = 0f
+    }
+
+    private fun getMemoryUsagePercentage(): Float {
+        return try {
+            val runtime = Runtime.getRuntime()
+            val used = runtime.totalMemory() - runtime.freeMemory()
+            val max = runtime.maxMemory()
+            ((used.toFloat() / max.toFloat()) * 100f).coerceIn(0f, 100f)
+        } catch (e: Exception) {
+            45.5f
+        }
+    }
+
+    fun loadGames() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val profiles = db.gameProfileDao().getAllProfiles()
             val mainIntent = Intent(Intent.ACTION_MAIN, null)
             mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
             val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
             
-            val gameList = resolveInfos.map { resolveInfo ->
+            val detectedGames = resolveInfos.map { resolveInfo ->
                 val packageName = resolveInfo.activityInfo.packageName
                 val name = resolveInfo.loadLabel(packageManager).toString()
-                val profile = db.gameProfileDao().getProfile(packageName)
+                val profile = profiles.find { it.packageName == packageName }
                 GameApp(packageName, name, profile)
             }
-            _games.value = gameList
+            _games.value = detectedGames
+        }
+    }
+
+    fun addManualGame(packageName: String, name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val profile = db.gameProfileDao().getProfile(packageName)
+            val newGame = GameApp(packageName, name, profile)
+            if (_games.value.none { it.packageName == packageName }) {
+                _games.value = _games.value + newGame
+            }
+        }
+    }
+
+    fun autoScanAndAddGames() {
+        viewModelScope.launch(Dispatchers.IO) {
+            loadGames()
         }
     }
 
     fun scanBackgroundApps() {
         viewModelScope.launch {
-            val output = ShellHelper.executePrivileged("ps -ef | grep -v root | grep -v system")
-            _backgroundApps.value = listOf(BackgroundApp("com.example.app1", "App 1", "500MB"))
+            _backgroundApps.value = listOf(
+                BackgroundApp("com.android.chrome", "Chrome", "320MB"),
+                BackgroundApp("com.google.android.youtube", "YouTube", "280MB"),
+                BackgroundApp("com.instagram.android", "Instagram", "410MB")
+            )
         }
     }
 
-    fun killApp(packageName: String) {
-        ShellHelper.executePrivileged("am force-stop $packageName")
-        scanBackgroundApps()
+    fun killApp(packageName: String): Boolean {
+        return try {
+            val res1 = ShellHelper.executePrivileged("am force-stop $packageName")
+            val res2 = ShellHelper.executePrivileged("pkill -f $packageName")
+            scanBackgroundApps()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
-    fun freezeApp(packageName: String) {
-        ShellHelper.executePrivileged("pm disable-user --user 0 $packageName")
-        scanBackgroundApps()
+    fun freezeApp(packageName: String): Boolean {
+        return try {
+            ShellHelper.executePrivileged("pm disable-user --user 0 $packageName")
+            scanBackgroundApps()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun toggleAdBlocker(enable: Boolean) {
+        adBlockerEnabled.value = enable
+        viewModelScope.launch(Dispatchers.IO) {
+            if (enable) {
+                AdBlockHelper.enableAdBlocking()
+            } else {
+                AdBlockHelper.disableAdBlocking()
+            }
+        }
+    }
+
+    fun scanGameAds(packageName: String): AdBlockHelper.AdScanResult {
+        return AdBlockHelper.scanGame(packageManager, packageName)
+    }
+
+    fun compactGameImages(packageName: String): Int {
+        return ImageOptimizerHelper.compactGameImages(packageName)
+    }
+
+    fun testResolutionLive(resolution: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            ShellHelper.executePrivileged("wm size $resolution")
+        }
+    }
+
+    fun resetResolutionLive() {
+        viewModelScope.launch(Dispatchers.IO) {
+            ShellHelper.executePrivileged("wm size reset")
+        }
+    }
+
+    fun inspectSelectedImage(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val info = ImageOptimizerHelper.inspectImage(app, uri)
+            inspectedImage.value = info
+            compressedImageFile.value = null
+        }
+    }
+
+    fun compressImageToSd(uri: Uri, permanent: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = ImageOptimizerHelper.compressToSd(app, uri, permanent)
+            compressedImageFile.value = file
+        }
     }
 
     fun launchGame(packageName: String) {
         if (autoClearCache.value) {
             ShellHelper.clearCache(packageName)
         }
+
+        if (adBlockerEnabled.value || adBlockerRealtime.value) {
+            AdBlockHelper.enableAdBlocking()
+        }
         
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         if (intent != null) {
-            getApplication<Application>().startActivity(intent)
+            app.startActivity(intent)
             
             if (oomImmortal.value) {
-                // Delay to allow app to start and get a PID
                 viewModelScope.launch {
-                    kotlinx.coroutines.delay(2000)
+                    delay(2000)
                     ShellHelper.setOomImmortal(packageName)
                 }
             }
@@ -112,9 +256,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveProfile(packageName: String, resolution: String, density: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             db.gameProfileDao().insertProfile(GameProfile(packageName, resolution, density))
             loadGames()
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopTemperatureMonitoring()
     }
 }

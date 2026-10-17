@@ -2,7 +2,6 @@ package com.example
 
 import android.app.Application
 import android.content.Intent
-import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -17,6 +16,12 @@ data class GameApp(
     val profile: GameProfile?
 )
 
+data class BackgroundApp(
+    val packageName: String,
+    val name: String,
+    val memUsage: String
+)
+
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val packageManager = application.packageManager
     private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db").build()
@@ -24,10 +29,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _games = MutableStateFlow<List<GameApp>>(emptyList())
     val games: StateFlow<List<GameApp>> = _games
 
+    private val _backgroundApps = MutableStateFlow<List<BackgroundApp>>(emptyList())
+    val backgroundApps: StateFlow<List<BackgroundApp>> = _backgroundApps
+
     val nativeResolution = ShellHelper.getNativeResolution()
 
     init {
         loadGames()
+        scanBackgroundApps()
     }
 
     private fun loadGames() {
@@ -44,6 +53,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
             _games.value = gameList
         }
+    }
+
+    fun scanBackgroundApps() {
+        viewModelScope.launch {
+            // Simplified scan for now: get list of running processes via dumpsys
+            val output = ShellHelper.executePrivileged("ps -ef | grep -v root | grep -v system")
+            // Parsing ps output is complex, placeholder list for demonstration:
+            _backgroundApps.value = listOf(BackgroundApp("com.example.app1", "App 1", "500MB"))
+        }
+    }
+
+    fun killApp(packageName: String) {
+        ShellHelper.executePrivileged("am force-stop $packageName")
+        scanBackgroundApps()
+    }
+
+    fun freezeApp(packageName: String) {
+        ShellHelper.executePrivileged("pm disable-user --user 0 $packageName")
+        scanBackgroundApps()
     }
 
     fun launchGame(packageName: String) {

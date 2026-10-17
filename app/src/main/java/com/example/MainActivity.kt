@@ -47,107 +47,63 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: GameViewModel = viewModel()) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Games", "Background Apps")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(title = { Text("Game Booster") })
+        
+        TabRow(selectedTabIndex = selectedTab) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        when (selectedTab) {
+            0 -> GameListTab(viewModel)
+            1 -> BackgroundAppsTab(viewModel)
+        }
+    }
+}
+
+@Composable
+fun GameListTab(viewModel: GameViewModel) {
     val games by viewModel.games.collectAsState()
     var selectedGame by remember { mutableStateOf<GameApp?>(null) }
     var showDialog by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
-    var showAbout by remember { mutableStateOf(false) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Game Booster") },
-            actions = {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+    LazyColumn {
+        items(games) { game ->
+            ListItem(
+                modifier = Modifier.clickable {
+                    if (ShizukuHelper.hasPermission()) {
+                        selectedGame = game
+                        showDialog = true
+                    }
+                },
+                headlineContent = { Text(game.name) },
+                supportingContent = { 
+                    val res = game.profile?.resolution ?: viewModel.nativeResolution
+                    Text("Res: $res") 
+                },
+                trailingContent = {
+                    TextButton(onClick = { viewModel.launchGame(game.packageName) }) {
+                        Text("Launch")
+                    }
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(id = R.string.menu_language)) }, onClick = { showLanguageDialog = true; showMenu = false })
-                    DropdownMenuItem(text = { Text(stringResource(id = R.string.menu_about)) }, onClick = { showAbout = true; showMenu = false })
-                }
-            }
-        )
-        
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Native Res: ${viewModel.nativeResolution}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Button(onClick = {
-                if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
-                    ShizukuHelper.requestPermission()
-                }
-            }) {
-                Text("Initialize Shizuku")
-            }
-            
-            LazyColumn {
-                items(games) { game ->
-                    ListItem(
-                        modifier = Modifier.clickable {
-                            if (ShizukuHelper.hasPermission()) {
-                                selectedGame = game
-                                showDialog = true
-                            }
-                        },
-                        headlineContent = { Text(game.name) },
-                        supportingContent = { 
-                            val res = game.profile?.resolution ?: viewModel.nativeResolution
-                            Text("Res: $res") 
-                        },
-                        trailingContent = {
-                            TextButton(onClick = { viewModel.launchGame(game.packageName) }) {
-                                Text("Launch")
-                            }
-                        }
-                    )
-                }
-            }
+            )
         }
-    }
-
-    if (showAbout) {
-        AlertDialog(
-            onDismissRequest = { showAbout = false },
-            title = { Text(stringResource(id = R.string.about_title)) },
-            text = { Text(stringResource(id = R.string.about_description)) },
-            confirmButton = {
-                TextButton(onClick = { showAbout = false }) {
-                    Text(stringResource(id = R.string.ok))
-                }
-            }
-        )
-    }
-
-    if (showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLanguageDialog = false },
-            title = { Text(stringResource(id = R.string.language_dialog_title)) },
-            text = {
-                Column {
-                    Text(stringResource(id = R.string.language_en), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_pt), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_ru), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_zh), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_ko), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_hi), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                    Text(stringResource(id = R.string.language_fr), modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = false })
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
-                    Text(stringResource(id = R.string.ok))
-                }
-            }
-        )
     }
 
     if (showDialog && selectedGame != null) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("Edit Profile: ${selectedGame?.name}") },
-            text = {
-                Text("Tap to simulate save (1080x1920, 480dpi)")
-            },
+            text = { Text("Tap to simulate save (1080x1920, 480dpi)") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.saveProfile(selectedGame!!.packageName, "1080x1920", 480)
@@ -157,5 +113,25 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun BackgroundAppsTab(viewModel: GameViewModel) {
+    val backgroundApps by viewModel.backgroundApps.collectAsState()
+
+    LazyColumn {
+        items(backgroundApps) { app ->
+            ListItem(
+                headlineContent = { Text(app.name) },
+                supportingContent = { Text("Mem: ${app.memUsage}") },
+                trailingContent = {
+                    Row {
+                        TextButton(onClick = { viewModel.killApp(app.packageName) }) { Text("Kill") }
+                        TextButton(onClick = { viewModel.freezeApp(app.packageName) }) { Text("Freeze") }
+                    }
+                }
+            )
+        }
     }
 }

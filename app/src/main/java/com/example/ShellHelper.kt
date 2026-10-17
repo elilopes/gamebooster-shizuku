@@ -18,9 +18,13 @@ object ShellHelper {
         }
     }
 
+    fun executePrivileged(command: String): String {
+        // Fallback for demonstration; full privilege requires Shizuku service binding.
+        return execute(command)
+    }
+
     fun getNativeResolution(): String {
         val output = execute("wm size")
-        // wm size output format: "Physical size: 1080x2400"
         return output.substringAfter("Physical size: ").ifEmpty { 
             execute("wm size").substringAfter("Override size: ").ifEmpty { "Unknown" } 
         }

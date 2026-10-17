@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Game Booster</string>
+    <string name="menu_language">Idioma</string>
+    <string name="menu_about">Sobre</string>
+    <string name="about_title">Sobre o Game Booster</string>
+    <string name="about_description">Este aplicativo permite criar perfis personalizados de resolução e densidade para seus jogos, melhorando o desempenho.\n\nIMPORTANTE: É obrigatório que o Shizuku esteja ativado. O aplicativo utiliza os privilégios temporários de root fornecidos pelo Shizuku para executar comandos de sistema com segurança.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="ok">OK</string>
+    <string name="language_dialog_title">Selecionar Idioma</string>
+</resources>

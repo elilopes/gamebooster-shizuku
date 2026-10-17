@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Game Booster</string>
+    <string name="menu_language">Язык</string>
+    <string name="menu_about">О приложении</string>
+    <string name="about_title">О Game Booster</string>
+    <string name="about_description">Это приложение позволяет создавать пользовательские профили разрешения и плотности для ваших игр, чтобы повысить производительность.\n\nВАЖНО: Shizuku должен быть активирован. Приложение использует временные права root, предоставляемые Shizuku, для безопасного выполнения системных команд.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="ok">OK</string>
+    <string name="language_dialog_title">Выберите язык</string>
+</resources>

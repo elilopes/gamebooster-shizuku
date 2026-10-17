@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Game Booster</string>
+    <string name="menu_language">语言</string>
+    <string name="menu_about">关于</string>
+    <string name="about_title">关于 Game Booster</string>
+    <string name="about_description">此应用程序允许您为游戏创建自定义分辨率和密度配置文件，以提高性能。\n\n重要提示：必须激活 Shizuku。该应用程序利用 Shizuku 提供的临时 root 权限来安全地执行系统命令。\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="ok">确定</string>
+    <string name="language_dialog_title">选择语言</string>
+</resources>

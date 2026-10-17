@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Game Booster</string>
+    <string name="menu_language">Language</string>
+    <string name="menu_about">About</string>
+    <string name="about_title">About Game Booster</string>
+    <string name="about_description">This application allows you to create custom resolution and density profiles for your games to improve performance.\n\nIMPORTANT: Shizuku must be activated. The app uses Shizuku's temporary root privileges to safely execute system commands.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="ok">OK</string>
+    <string name="language_dialog_title">Select Language</string>
+    <string name="language_en">English</string>
+    <string name="language_pt">Português (BR)</string>
+    <string name="language_ru">Русский</string>
+    <string name="language_zh">中文</string>
+    <string name="language_ko">한국어</string>
+    <string name="language_hi">हिन्दी</string>
+    <string name="language_fr">Français</string>
+</resources>

@@ -32,11 +32,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _backgroundApps = MutableStateFlow<List<BackgroundApp>>(emptyList())
     val backgroundApps: StateFlow<List<BackgroundApp>> = _backgroundApps
 
+    // Boost Settings State
+    val thermalBoost = MutableStateFlow(false)
+    val disableOverlays = MutableStateFlow(false)
+    val autoClearCache = MutableStateFlow(false)
+    val oomImmortal = MutableStateFlow(false)
+    val dashboardEnabled = MutableStateFlow(false)
+    val temperature = MutableStateFlow(0f)
+
     val nativeResolution = ShellHelper.getNativeResolution()
 
     init {
         loadGames()
         scanBackgroundApps()
+        startTemperatureMonitoring()
+    }
+
+    private fun startTemperatureMonitoring() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            while (true) {
+                if (dashboardEnabled.value) {
+                    temperature.value = ShellHelper.getTemperature()
+                }
+                kotlinx.coroutines.delay(2000)
+            }
+        }
     }
 
     private fun loadGames() {
@@ -57,9 +77,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun scanBackgroundApps() {
         viewModelScope.launch {
-            // Simplified scan for now: get list of running processes via dumpsys
             val output = ShellHelper.executePrivileged("ps -ef | grep -v root | grep -v system")
-            // Parsing ps output is complex, placeholder list for demonstration:
             _backgroundApps.value = listOf(BackgroundApp("com.example.app1", "App 1", "500MB"))
         }
     }
@@ -75,9 +93,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun launchGame(packageName: String) {
+        if (autoClearCache.value) {
+            ShellHelper.clearCache(packageName)
+        }
+        
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         if (intent != null) {
             getApplication<Application>().startActivity(intent)
+            
+            if (oomImmortal.value) {
+                // Delay to allow app to start and get a PID
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(2000)
+                    ShellHelper.setOomImmortal(packageName)
+                }
+            }
         }
     }
 

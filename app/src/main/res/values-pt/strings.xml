@@ -3,7 +3,16 @@
     <string name="menu_language">Idioma</string>
     <string name="menu_about">Sobre</string>
     <string name="about_title">Sobre o Game Booster</string>
-    <string name="about_description">Este aplicativo permite criar perfis personalizados de resolução e densidade para seus jogos, melhorando o desempenho.\n\nIMPORTANTE: É obrigatório que o Shizuku esteja ativado. O aplicativo utiliza os privilégios temporários de root fornecidos pelo Shizuku para executar comandos de sistema com segurança.\n\nby TechViva\nliclopes@gmail.com</string>
+    <string name="about_description">Este aplicativo permite criar perfis personalizados de resolução e densidade para seus jogos, melhorando o desempenho. IMPORTANTE: É obrigatório que o Shizuku esteja ativado. O aplicativo utiliza os privilégios temporários de root fornecidos pelo Shizuku para executar comandos de sistema com segurança. by TechViva liclopes@gmail.com</string>
     <string name="ok">OK</string>
     <string name="language_dialog_title">Selecionar Idioma</string>
+    
+    <string name="boost_thermal_title">Desativar Limite Térmico</string>
+    <string name="boost_thermal_desc">Desativa a limitação térmica para evitar que o sistema reduza a velocidade da CPU/GPU quando o dispositivo aquece.</string>
+    <string name="boost_overlay_title">Desativar Overlays de Hardware</string>
+    <string name="boost_overlay_desc">Desativa as sobreposições de hardware para dar ao jogo acesso direto à GPU para renderização.</string>
+    <string name="boost_cache_title">Limpeza Automática de Cache</string>
+    <string name="boost_cache_desc">Limpa automaticamente o diretório de cache do jogo antes de iniciar, garantindo um início limpo.</string>
+    <string name="boost_oom_title">OOM Killer Imortal</string>
+    <string name="boost_oom_desc">Define a prioridade do processo do jogo para ser imune ao OOM Killer do Android, evitando que ele seja fechado em segundo plano.</string>
 </resources>

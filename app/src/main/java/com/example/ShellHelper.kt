@@ -19,7 +19,8 @@ object ShellHelper {
     }
 
     fun executePrivileged(command: String): String {
-        // Fallback for demonstration; full privilege requires Shizuku service binding.
+        // Fallback for demonstration: in a production Shizuku app, 
+        // you would use Shizuku's specific binder interface.
         return execute(command)
     }
 
@@ -28,5 +29,20 @@ object ShellHelper {
         return output.substringAfter("Physical size: ").ifEmpty { 
             execute("wm size").substringAfter("Override size: ").ifEmpty { "Unknown" } 
         }
+    }
+    
+    fun clearCache(packageName: String) {
+        executePrivileged("rm -rf /data/data/$packageName/cache/*")
+    }
+
+    fun setOomImmortal(packageName: String) {
+        executePrivileged("echo -1000 > /proc/$(pidof $packageName)/oom_score_adj")
+    }
+
+    fun getTemperature(): Float {
+        // Simple fallback/demonstration reading
+        val output = execute("cat /sys/class/thermal/thermal_zone0/temp")
+        val temp = output.toFloatOrNull() ?: 0f
+        return if (temp > 1000) temp / 1000f else temp
     }
 }

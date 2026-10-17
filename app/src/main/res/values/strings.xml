@@ -13,4 +13,13 @@
     <string name="language_ko">한국어</string>
     <string name="language_hi">हिन्दी</string>
     <string name="language_fr">Français</string>
+    
+    <string name="boost_thermal_title">Thermal Limit Disable</string>
+    <string name="boost_thermal_desc">Disables thermal throttling to prevent the system from reducing CPU/GPU speed when the device gets hot.</string>
+    <string name="boost_overlay_title">Disable Hardware Overlays</string>
+    <string name="boost_overlay_desc">Disables hardware overlays to give the game direct access to the GPU for rendering.</string>
+    <string name="boost_cache_title">Auto Clear Cache</string>
+    <string name="boost_cache_desc">Automatically clears the game\'s cache directory before launching to ensure a fresh start.</string>
+    <string name="boost_oom_title">OOM Killer Immortal</string>
+    <string name="boost_oom_desc">Sets the game process priority to be immune to the Android OOM Killer, preventing it from being closed in the background.</string>
 </resources>

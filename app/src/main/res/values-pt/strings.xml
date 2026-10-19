@@ -41,10 +41,38 @@
     <string name="img_opt_permanent">Tornar compactação permanente</string>
     <string name="img_opt_success">Imagem compactada para SD e salva com sucesso!</string>
 
-    <string name="img_compact_btn">Compact Images</string>
+    <string name="img_compact_btn">Compactar Imagens</string>
     <string name="img_compact_success">Imagens compactadas com sucesso (%d imagens otimizadas).</string>
     <string name="img_compact_none">Nenhuma imagem grande encontrada.</string>
 
     <string name="kill_success">Aplicativo finalizado com sucesso.</string>
     <string name="kill_fail">Impossível finalizar o aplicativo.</string>
+
+    <string name="game_native_resolution">Resolução Nativa</string>
+    <string name="game_shizuku_active">Shizuku Ativo</string>
+    <string name="game_shizuku_authorize">Autorizar Shizuku</string>
+    <string name="game_add_manually">Adicionar Manual</string>
+    <string name="game_auto_scan">Varredura Auto</string>
+    <string name="game_verify_ads">Verificar Anúncios</string>
+    <string name="game_launch">Iniciar</string>
+    <string name="game_add_manual_title">Adicionar Jogo Manualmente</string>
+    <string name="game_app_name_label">Nome do Aplicativo</string>
+    <string name="game_pkg_name_label">Nome do Pacote (ex: com.jogo)</string>
+    <string name="game_save_permanent">Salvar Permanentemente</string>
+    <string name="game_test_res_desc">Testar resolução ao vivo antes de salvar permanentemente:</string>
+    <string name="game_res_input_label">Resolução (Largura x Altura ex: 1280x720)</string>
+    <string name="game_test_live">Testar ao Vivo</string>
+    <string name="game_reset">Redefinir</string>
+    <string name="game_res_profile_title">Perfil de Resolução</string>
+    <string name="game_img_compactor_title">Compactador de Imagens</string>
+
+    <string name="btn_kill">Finalizar</string>
+    <string name="btn_freeze">Congelar</string>
+    <string name="game_check_updates">Verificar Atualizações</string>
+    <string name="game_updates_title">Status de Atualização dos Jogos</string>
+    <string name="game_updates_desc">Versão dos jogos instalados. As atualizações não são baixadas automaticamente; toque para abrir no Google Play e atualizar com segurança:</string>
+    <string name="game_open_store">Abrir no Google Play</string>
+    <string name="shizuku_download_btn">Baixar Shizuku</string>
+    <string name="shizuku_github_label">Repositório GitHub do Shizuku</string>
+    <string name="app_control_title">Controle de Apps</string>
 </resources>

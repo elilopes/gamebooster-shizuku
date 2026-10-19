@@ -12,6 +12,7 @@
     <string name="tab_background">Фоновые приложения</string>
     <string name="tab_boost_settings">Настройки Boost</string>
     <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="menu_enable_thermal">Включить Thermal monitor</string>
     <string name="menu_disable_thermal">Отключить Thermal monitor</string>
     <string name="thermal_monitor_warning">Дополнительная функция: работает периодический опрос. Вы можете отключить эту вкладку в меню для экономии оперативной памяти и батареи.</string>
@@ -27,9 +28,51 @@
     <string name="boost_oom_desc">Задает приоритет процесса игры, защищая ее от закрытия системой при нехватке памяти.</string>
     <string name="boost_adblock_title">Блокировщик рекламы (Shizuku DNS)</string>
     <string name="boost_adblock_desc">Блокирует рекламные сети в играх (AdMob, Unity Ads, AppLovin) на уровне системы через Private DNS.</string>
+    <string name="boost_warning_note">Примечание: некоторые настройки ускорения могут вызвать перегрев устройства.</string>
 
     <string name="ad_scan_button">Проверить рекламу</string>
     <string name="ad_scan_title">Анализатор рекламы игры</string>
     <string name="ad_scan_clean">В этом приложении не обнаружено известных рекламных сетей.</string>
     <string name="ad_scan_detected">Обнаружены рекламные SDK в игре:</string>
+
+    <string name="img_opt_title">Инспектор изображений &amp; SD Компрессор</string>
+    <string name="img_opt_pick">Выбрать изображение (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">Сжать до SD</string>
+    <string name="img_opt_permanent">Сделать сжатие постоянным</string>
+    <string name="img_opt_success">Изображение успешно сжато до SD и сохранено!</string>
+
+    <string name="img_compact_btn">Сжать изображения</string>
+    <string name="img_compact_success">Изображения успешно сжаты (%d оптимизировано).</string>
+    <string name="img_compact_none">Большие изображения не найдены.</string>
+
+    <string name="kill_success">Приложение успешно завершено.</string>
+    <string name="kill_fail">Не удалось завершить приложение.</string>
+
+    <string name="game_native_resolution">Родное разрешение</string>
+    <string name="game_shizuku_active">Shizuku активен</string>
+    <string name="game_shizuku_authorize">Авторизовать Shizuku</string>
+    <string name="game_add_manually">Добавить вручную</string>
+    <string name="game_auto_scan">Автосканирование</string>
+    <string name="game_verify_ads">Проверить рекламу</string>
+    <string name="game_launch">Запуск</string>
+    <string name="game_add_manual_title">Добавить игру вручную</string>
+    <string name="game_app_name_label">Имя приложения</string>
+    <string name="game_pkg_name_label">Имя пакета (например com.game)</string>
+    <string name="game_save_permanent">Сохранить навсегда</string>
+    <string name="game_test_res_desc">Тестировать разрешение в реальном времени перед сохранением:</string>
+    <string name="game_res_input_label">Разрешение (Ширина x Высота, например 1280x720)</string>
+    <string name="game_test_live">Тест в реальном времени</string>
+    <string name="game_reset">Сброс</string>
+    <string name="game_res_profile_title">Профиль разрешения</string>
+    <string name="game_img_compactor_title">Компрессор изображений</string>
+
+    <string name="btn_kill">Завершить</string>
+    <string name="btn_freeze">Заморозить</string>
+    <string name="game_check_updates">Проверить обновления</string>
+    <string name="game_updates_title">Статус обновлений игр</string>
+    <string name="game_updates_desc">Версии установленных игр. Обновления не скачиваются автоматически; нажмите для перехода в Google Play:</string>
+    <string name="game_open_store">Открыть в Google Play</string>
+    <string name="shizuku_download_btn">Скачать Shizuku</string>
+    <string name="shizuku_github_label">Репозиторий Shizuku на GitHub</string>
+    <string name="app_control_title">Управление приложениями</string>
 </resources>

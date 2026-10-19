@@ -12,6 +12,7 @@
     <string name="tab_background">백그라운드 앱</string>
     <string name="tab_boost_settings">부스트 설정</string>
     <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="menu_enable_thermal">Thermal monitor 활성화</string>
     <string name="menu_disable_thermal">Thermal monitor 비활성화</string>
     <string name="thermal_monitor_warning">선택 기능: 실시간 온도 조회가 작동 중입니다. 메모리와 배터리를 절약하려면 메뉴에서 언제든지 비활성화할 수 있습니다.</string>
@@ -27,9 +28,51 @@
     <string name="boost_oom_desc">게임 프로세스 우선순위를 고정하여 백그라운드에서 강제 종료되지 않도록 보호합니다.</string>
     <string name="boost_adblock_title">게임 광고 차단기 (Shizuku DNS)</string>
     <string name="boost_adblock_desc">Shizuku Private DNS를 사용하여 게임 내 광고(AdMob, Unity Ads, AppLovin)를 시스템 수준에서 차단합니다.</string>
+    <string name="boost_warning_note">참고: 일부 가속 설정으로 인해 기기가 과열될 수 있습니다.</string>
 
     <string name="ad_scan_button">광고 검사</string>
     <string name="ad_scan_title">게임 광고 분석기</string>
     <string name="ad_scan_clean">알려진 광고 네트워크가 감지되지 않았습니다. 깨끗한 게임입니다.</string>
     <string name="ad_scan_detected">감지된 광고 SDK 목록:</string>
+
+    <string name="img_opt_title">이미지 검사기 &amp; SD 압축기</string>
+    <string name="img_opt_pick">이미지 선택 (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">SD로 압축</string>
+    <string name="img_opt_permanent">압축 영구 적용</string>
+    <string name="img_opt_success">이미지가 SD로 성공적으로 압축 및 저장되었습니다!</string>
+
+    <string name="img_compact_btn">이미지 압축</string>
+    <string name="img_compact_success">이미지가 성공적으로 압축되었습니다 (최적화된 이미지: %d개).</string>
+    <string name="img_compact_none">큰 이미지를 찾을 수 없습니다.</string>
+
+    <string name="kill_success">애플리케이션이 성공적으로 종료되었습니다.</string>
+    <string name="kill_fail">애플리케이션을 종료할 수 없습니다.</string>
+
+    <string name="game_native_resolution">기본 해상도</string>
+    <string name="game_shizuku_active">Shizuku 활성화됨</string>
+    <string name="game_shizuku_authorize">Shizuku 승인</string>
+    <string name="game_add_manually">수동 추가</string>
+    <string name="game_auto_scan">자동 스캔</string>
+    <string name="game_verify_ads">광고 검사</string>
+    <string name="game_launch">실행</string>
+    <string name="game_add_manual_title">수동으로 게임 추가</string>
+    <string name="game_app_name_label">앱 이름</string>
+    <string name="game_pkg_name_label">패키지 이름 (예: com.game)</string>
+    <string name="game_save_permanent">영구 저장</string>
+    <string name="game_test_res_desc">영구 저장하기 전 실시간으로 해상도 테스트:</string>
+    <string name="game_res_input_label">해상도 (가로 x 세로 예: 1280x720)</string>
+    <string name="game_test_live">실시간 테스트</string>
+    <string name="game_reset">재설정</string>
+    <string name="game_res_profile_title">해상도 프로필</string>
+    <string name="game_img_compactor_title">이미지 압축기</string>
+
+    <string name="btn_kill">종료</string>
+    <string name="btn_freeze">동결</string>
+    <string name="game_check_updates">업데이트 확인</string>
+    <string name="game_updates_title">게임 업데이트 상태</string>
+    <string name="game_updates_desc">설치된 게임 버전입니다. 업데이트는 자동으로 다운로드되지 않으며, Google Play에서 안전하게 확인할 수 있습니다:</string>
+    <string name="game_open_store">Google Play에서 열기</string>
+    <string name="shizuku_download_btn">Shizuku 다운로드</string>
+    <string name="shizuku_github_label">Shizuku GitHub 저장소</string>
+    <string name="app_control_title">앱 제어</string>
 </resources>

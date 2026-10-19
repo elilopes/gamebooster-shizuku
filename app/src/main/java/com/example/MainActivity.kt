@@ -25,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -123,7 +125,18 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(id = R.string.app_name)) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_chip),
+                        contentDescription = "Game Booster Chip",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.app_name))
+                }
+            },
             actions = {
                 ShizukuStatusBadge()
                 Spacer(modifier = Modifier.width(8.dp))
@@ -190,10 +203,51 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     }
 
     if (showAbout) {
+        val uriHandler = LocalUriHandler.current
         AlertDialog(
             onDismissRequest = { showAbout = false },
-            title = { Text(stringResource(id = R.string.about_title)) },
-            text = { Text(stringResource(id = R.string.about_description)) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_chip),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.about_title))
+                }
+            },
+            text = {
+                Column {
+                    Text(stringResource(id = R.string.about_description))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(id = R.string.shizuku_github_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "https://github.com/RikkaApps/Shizuku-API",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier
+                            .clickable {
+                                uriHandler.openUri("https://github.com/RikkaApps/Shizuku-API")
+                            }
+                            .padding(vertical = 4.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            uriHandler.openUri("https://github.com/RikkaApps/Shizuku-API")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.shizuku_download_btn))
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = { showAbout = false }) {
                     Text(stringResource(id = R.string.ok))
@@ -410,9 +464,12 @@ fun ImageOptimizerTab(viewModel: GameViewModel) {
 
 @Composable
 fun GameListTab(viewModel: GameViewModel) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val games by viewModel.games.collectAsState()
     var selectedGame by remember { mutableStateOf<GameApp?>(null) }
     var showDialog by remember { mutableStateOf(false) }
+    var showUpdatesDialog by remember { mutableStateOf(false) }
     var adScanResult by remember { mutableStateOf<AdBlockHelper.AdScanResult?>(null) }
     var compactResultMsg by remember { mutableStateOf<String?>(null) }
 
@@ -434,9 +491,9 @@ fun GameListTab(viewModel: GameViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Native Resolution",
+                                text = stringResource(id = R.string.game_native_resolution),
                                 style = MaterialTheme.typography.labelMedium
                             )
                             Text(
@@ -444,33 +501,59 @@ fun GameListTab(viewModel: GameViewModel) {
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
-                        Button(onClick = {
-                            if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
-                                ShizukuHelper.requestPermission()
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    uriHandler.openUri("https://github.com/RikkaApps/Shizuku-API")
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.shizuku_download_btn),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
-                        }) {
-                            Text(
-                                if (ShizukuHelper.hasPermission()) "Shizuku Active" else "Authorize Shizuku"
-                            )
+                            Button(
+                                onClick = {
+                                    if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
+                                        ShizukuHelper.requestPermission()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (ShizukuHelper.hasPermission()) stringResource(id = R.string.game_shizuku_active) else stringResource(id = R.string.game_shizuku_authorize),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Button(
                             onClick = { showManualAddDialog = true },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) {
-                            Text("Add Manually")
+                            Text(stringResource(id = R.string.game_add_manually), style = MaterialTheme.typography.labelSmall)
                         }
                         Button(
                             onClick = { viewModel.autoScanAndAddGames() },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) {
-                            Text("Auto Scan")
+                            Text(stringResource(id = R.string.game_auto_scan), style = MaterialTheme.typography.labelSmall)
+                        }
+                        OutlinedButton(
+                            onClick = { showUpdatesDialog = true },
+                            modifier = Modifier.weight(1.2f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text(stringResource(id = R.string.game_check_updates), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -496,12 +579,27 @@ fun GameListTab(viewModel: GameViewModel) {
                         text = game.name,
                         style = MaterialTheme.typography.titleMedium
                     )
-                    val res = game.profile?.resolution ?: viewModel.nativeResolution
-                    Text(
-                        text = "Res: $res",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Text(
+                                text = "v${game.versionName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                        val res = game.profile?.resolution ?: viewModel.nativeResolution
+                        Text(
+                            text = "Res: $res",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -513,14 +611,14 @@ fun GameListTab(viewModel: GameViewModel) {
                             onClick = {
                                 val count = viewModel.compactGameImages(game.packageName)
                                 compactResultMsg = if (count > 0) {
-                                    String.format(java.util.Locale.getDefault(), "Images compressed successfully (%d optimized).", count)
+                                    context.getString(R.string.img_compact_success, count)
                                 } else {
-                                    "No large images found."
+                                    context.getString(R.string.img_compact_none)
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Compact Images")
+                            Text(stringResource(id = R.string.img_compact_btn))
                         }
 
                         Spacer(modifier = Modifier.width(4.dp))
@@ -537,7 +635,7 @@ fun GameListTab(viewModel: GameViewModel) {
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(2.dp))
-                            Text("Ads")
+                            Text(stringResource(id = R.string.game_verify_ads))
                         }
 
                         Spacer(modifier = Modifier.width(4.dp))
@@ -546,7 +644,7 @@ fun GameListTab(viewModel: GameViewModel) {
                             onClick = { viewModel.launchGame(game.packageName) },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                         ) {
-                            Text("Launch")
+                            Text(stringResource(id = R.string.game_launch))
                         }
                     }
                 }
@@ -557,20 +655,20 @@ fun GameListTab(viewModel: GameViewModel) {
     if (showManualAddDialog) {
         AlertDialog(
             onDismissRequest = { showManualAddDialog = false },
-            title = { Text("Add Game Manually") },
+            title = { Text(stringResource(id = R.string.game_add_manual_title)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = manualName,
                         onValueChange = { manualName = it },
-                        label = { Text("App Name") },
+                        label = { Text(stringResource(id = R.string.game_app_name_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = manualPkg,
                         onValueChange = { manualPkg = it },
-                        label = { Text("Package Name (e.g. com.game)") },
+                        label = { Text(stringResource(id = R.string.game_pkg_name_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -598,7 +696,7 @@ fun GameListTab(viewModel: GameViewModel) {
     if (compactResultMsg != null) {
         AlertDialog(
             onDismissRequest = { compactResultMsg = null },
-            title = { Text("Image Compactor") },
+            title = { Text(stringResource(id = R.string.game_img_compactor_title)) },
             text = { Text(compactResultMsg!!) },
             confirmButton = {
                 TextButton(onClick = { compactResultMsg = null }) {
@@ -611,15 +709,15 @@ fun GameListTab(viewModel: GameViewModel) {
     if (showDialog && selectedGame != null) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("Resolution Profile: ${selectedGame?.name}") },
+            title = { Text("${stringResource(id = R.string.game_res_profile_title)}: ${selectedGame?.name}") },
             text = {
                 Column {
-                    Text("Test resolution live before saving permanently:")
+                    Text(stringResource(id = R.string.game_test_res_desc))
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = customResolutionInput,
                         onValueChange = { customResolutionInput = it },
-                        label = { Text("Resolution (Width x Height e.g. 1280x720)") },
+                        label = { Text(stringResource(id = R.string.game_res_input_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -631,13 +729,13 @@ fun GameListTab(viewModel: GameViewModel) {
                             onClick = { viewModel.testResolutionLive(customResolutionInput.trim()) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Test Live")
+                            Text(stringResource(id = R.string.game_test_live))
                         }
                         OutlinedButton(
                             onClick = { viewModel.resetResolutionLive() },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Reset")
+                            Text(stringResource(id = R.string.game_reset))
                         }
                     }
                 }
@@ -650,7 +748,7 @@ fun GameListTab(viewModel: GameViewModel) {
                     }
                     showDialog = false
                 }) {
-                    Text("Save Permanently")
+                    Text(stringResource(id = R.string.game_save_permanent))
                 }
             },
             dismissButton = {
@@ -697,10 +795,50 @@ fun GameListTab(viewModel: GameViewModel) {
             }
         )
     }
+
+    if (showUpdatesDialog) {
+        AlertDialog(
+            onDismissRequest = { showUpdatesDialog = false },
+            title = { Text(stringResource(id = R.string.game_updates_title)) },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(id = R.string.game_updates_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+                        items(games) { game ->
+                            ListItem(
+                                headlineContent = { Text(game.name, style = MaterialTheme.typography.bodyMedium) },
+                                supportingContent = { Text("v${game.versionName}", style = MaterialTheme.typography.bodySmall) },
+                                trailingContent = {
+                                    OutlinedButton(
+                                        onClick = { viewModel.openAppInStore(game.packageName) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(stringResource(id = R.string.game_open_store), style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showUpdatesDialog = false }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun BackgroundAppsTab(viewModel: GameViewModel) {
+    val context = LocalContext.current
     val backgroundApps by viewModel.backgroundApps.collectAsState()
     var killAlertMsg by remember { mutableStateOf<String?>(null) }
 
@@ -718,12 +856,14 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
                         TextButton(onClick = {
                             val success = viewModel.killApp(app.packageName)
                             killAlertMsg = if (success) {
-                                "Application terminated successfully."
+                                context.getString(R.string.kill_success)
                             } else {
-                                "Unable to terminate application."
+                                context.getString(R.string.kill_fail)
                             }
-                        }) { Text("Kill") }
-                        TextButton(onClick = { viewModel.freezeApp(app.packageName) }) { Text("Freeze") }
+                        }) { Text(stringResource(id = R.string.btn_kill)) }
+                        TextButton(onClick = { viewModel.freezeApp(app.packageName) }) {
+                            Text(stringResource(id = R.string.btn_freeze))
+                        }
                     }
                 }
             )
@@ -733,7 +873,7 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
     if (killAlertMsg != null) {
         AlertDialog(
             onDismissRequest = { killAlertMsg = null },
-            title = { Text("App Control") },
+            title = { Text(stringResource(id = R.string.app_control_title)) },
             text = { Text(killAlertMsg!!) },
             confirmButton = {
                 TextButton(onClick = { killAlertMsg = null }) {

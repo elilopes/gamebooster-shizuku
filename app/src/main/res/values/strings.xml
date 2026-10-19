@@ -54,4 +54,32 @@
 
     <string name="kill_success">Application terminated successfully.</string>
     <string name="kill_fail">Unable to terminate application.</string>
+
+    <string name="game_native_resolution">Native Resolution</string>
+    <string name="game_shizuku_active">Shizuku Active</string>
+    <string name="game_shizuku_authorize">Authorize Shizuku</string>
+    <string name="game_add_manually">Add Manually</string>
+    <string name="game_auto_scan">Auto Scan</string>
+    <string name="game_verify_ads">Verify ads</string>
+    <string name="game_launch">Launch</string>
+    <string name="game_add_manual_title">Add Game Manually</string>
+    <string name="game_app_name_label">App Name</string>
+    <string name="game_pkg_name_label">Package Name (e.g. com.game)</string>
+    <string name="game_save_permanent">Save Permanently</string>
+    <string name="game_test_res_desc">Test resolution live before saving permanently:</string>
+    <string name="game_res_input_label">Resolution (Width x Height e.g. 1280x720)</string>
+    <string name="game_test_live">Test Live</string>
+    <string name="game_reset">Reset</string>
+    <string name="game_res_profile_title">Resolution Profile</string>
+    <string name="game_img_compactor_title">Image Compactor</string>
+
+    <string name="btn_kill">Kill</string>
+    <string name="btn_freeze">Freeze</string>
+    <string name="game_check_updates">Check for Updates</string>
+    <string name="game_updates_title">Games Update Status</string>
+    <string name="game_updates_desc">Version of installed games. Updates are not downloaded automatically; click a game to view it securely on Google Play:</string>
+    <string name="game_open_store">Open in Google Play</string>
+    <string name="shizuku_download_btn">Download Shizuku</string>
+    <string name="shizuku_github_label">Shizuku GitHub Repository</string>
+    <string name="app_control_title">App Control</string>
 </resources>

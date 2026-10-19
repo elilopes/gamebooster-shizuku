@@ -18,7 +18,8 @@ import java.io.File
 data class GameApp(
     val packageName: String,
     val name: String,
-    val profile: GameProfile?
+    val profile: GameProfile?,
+    val versionName: String = "1.0.0"
 )
 
 data class BackgroundApp(
@@ -134,7 +135,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val packageName = resolveInfo.activityInfo.packageName
                 val name = resolveInfo.loadLabel(packageManager).toString()
                 val profile = profiles.find { it.packageName == packageName }
-                GameApp(packageName, name, profile)
+                val versionName = try {
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+                } catch (e: Exception) {
+                    "1.0.0"
+                }
+                GameApp(packageName, name, profile, versionName)
             }
             _games.value = detectedGames
         }
@@ -143,10 +149,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun addManualGame(packageName: String, name: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val profile = db.gameProfileDao().getProfile(packageName)
-            val newGame = GameApp(packageName, name, profile)
+            val versionName = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            } catch (e: Exception) {
+                "1.0.0"
+            }
+            val newGame = GameApp(packageName, name, profile, versionName)
             if (_games.value.none { it.packageName == packageName }) {
                 _games.value = _games.value + newGame
             }
+        }
+    }
+
+    fun openAppInStore(packageName: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            app.startActivity(intent)
+        } catch (e: Exception) {
+            val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            app.startActivity(webIntent)
         }
     }
 

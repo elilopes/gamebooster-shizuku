@@ -3,33 +3,76 @@
     <string name="menu_language">Langue</string>
     <string name="menu_about">À propos</string>
     <string name="about_title">À propos de Game Booster</string>
-    <string name="about_description">Cette application vous permet de créer des profils de résolution et de densité personnalisés pour vos jeux afin d\'améliorer les performances. IMPORTANT : Shizuku doit être activé. L\'application utilise les privilèges root temporaires fournis par Shizuku pour exécuter les commandes système en toute sécurité. by TechViva liclopes@gmail.com</string>
+    <string name="about_description">Cette application vous permet de créer des profils personnalisés de résolution et de densité pour vos jeux afin d\'améliorer les performances. IMPORTANT : Shizuku doit être activé. L\'application utilise les privilèges root temporaires de Shizuku pour exécuter des commandes système en toute sécurité. by TechViva liclopes@gmail.com</string>
     <string name="ok">OK</string>
     <string name="cancel">Annuler</string>
     <string name="language_dialog_title">Choisir la langue</string>
     
     <string name="tab_games">Jeux</string>
-    <string name="tab_background">Applications en arrière-plan</string>
-    <string name="tab_boost_settings">Réglages Boost</string>
+    <string name="tab_background">Apps en arrière-plan</string>
+    <string name="tab_boost_settings">Paramètres Boost</string>
     <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="menu_enable_thermal">Activer Thermal monitor</string>
     <string name="menu_disable_thermal">Désactiver Thermal monitor</string>
-    <string name="thermal_monitor_warning">Fonction optionnelle : Surveillance active en cours. Vous pouvez désactiver cet onglet dans le menu à tout moment pour économiser la mémoire vive et la batterie.</string>
+    <string name="thermal_monitor_warning">Fonction optionnelle : Le sondage actif s\'exécute. Vous pouvez désactiver cet onglet du menu à tout moment pour économiser de la RAM et du CPU.</string>
     <string name="thermal_monitor_header">Température de l\'appareil</string>
 
     <string name="boost_thermal_title">Désactiver la limite thermique</string>
-    <string name="boost_thermal_desc">Désactive la limitation thermique pour éviter que le système ne réduise la fréquence CPU/GPU lors de la surchauffe.</string>
+    <string name="boost_thermal_desc">Désactive la limitation thermique pour empêcher le système de réduire la vitesse du CPU/GPU lorsque l\'appareil chauffe.</string>
     <string name="boost_overlay_title">Désactiver les superpositions matérielles</string>
-    <string name="boost_overlay_desc">Désactive les overlays pour permettre au jeu d\'accéder directement au GPU.</string>
-    <string name="boost_cache_title">Nettoyage automatique du cache</string>
-    <string name="boost_cache_desc">Nettoie automatiquement le cache du jeu avant le lancement.</string>
-    <string name="boost_oom_title">OOM Killer Immortel</string>
-    <string name="boost_oom_desc">Verrouille la priorité du jeu pour empêcher le système Android de le fermer en arrière-plan.</string>
-    <string name="boost_adblock_title">Bloqueur de pub jeux (Shizuku DNS)</string>
-    <string name="boost_adblock_desc">Bloque les régies publicitaires (AdMob, Unity Ads, AppLovin) au niveau système via Private DNS.</string>
+    <string name="boost_overlay_desc">Désactive les superpositions matérielles pour donner au jeu un accès direct au GPU pour le rendu.</string>
+    <string name="boost_cache_title">Vider le cache automatiquement</string>
+    <string name="boost_cache_desc">Efface automatiquement le répertoire de cache du jeu avant le lancement pour garantir un démarrage propre.</string>
+    <string name="boost_oom_title">Immortel OOM Killer</string>
+    <string name="boost_oom_desc">Définit la priorité du processus du jeu pour être immunisé contre l\'OOM Killer d\'Android, évitant qu\'il ne soit fermé en arrière-plan.</string>
+    <string name="boost_adblock_title">Bloqueur de pubs (Shizuku DNS)</string>
+    <string name="boost_adblock_desc">Bloque les réseaux publicitaires à l\'échelle du système en utilisant Shizuku Private DNS.</string>
+    <string name="boost_warning_note">Remarque : certains paramètres d\'accélération peuvent faire surchauffer l\'appareil.</string>
 
-    <string name="ad_scan_button">Vérifier pubs</string>
-    <string name="ad_scan_title">Inspecteur de publicités</string>
-    <string name="ad_scan_clean">Aucun réseau publicitaire détecté. Le jeu est propre.</string>
+    <string name="ad_scan_button">Vérifier les pubs</string>
+    <string name="ad_scan_title">Inspecteur de pubs du jeu</string>
+    <string name="ad_scan_clean">Aucun réseau publicitaire détecté dans ce paquet. Le jeu est propre.</string>
     <string name="ad_scan_detected">SDK publicitaires détectés dans ce jeu :</string>
+
+    <string name="img_opt_title">Inspecteur d\'images &amp; Compresseur SD</string>
+    <string name="img_opt_pick">Sélectionner une image (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">Compresser en SD</string>
+    <string name="img_opt_permanent">Rendre la compression permanente</string>
+    <string name="img_opt_success">Image compressée avec succès en SD et enregistrée !</string>
+
+    <string name="img_compact_btn">Compresser images</string>
+    <string name="img_compact_success">Images compressées avec succès (%d optimisées).</string>
+    <string name="img_compact_none">Aucune grande image trouvée.</string>
+
+    <string name="kill_success">Application terminée avec succès.</string>
+    <string name="kill_fail">Impossible de terminer l\'application.</string>
+
+    <string name="game_native_resolution">Résolution native</string>
+    <string name="game_shizuku_active">Shizuku actif</string>
+    <string name="game_shizuku_authorize">Autoriser Shizuku</string>
+    <string name="game_add_manually">Ajouter manuellement</string>
+    <string name="game_auto_scan">Scan automatique</string>
+    <string name="game_verify_ads">Vérifier pubs</string>
+    <string name="game_launch">Lancer</string>
+    <string name="game_add_manual_title">Ajouter un jeu manuellement</string>
+    <string name="game_app_name_label">Nom de l\'application</string>
+    <string name="game_pkg_name_label">Nom du package (ex. com.game)</string>
+    <string name="game_save_permanent">Enregistrer définitivement</string>
+    <string name="game_test_res_desc">Tester la résolution en direct avant d\'enregistrer définitivement :</string>
+    <string name="game_res_input_label">Résolution (Largeur x Hauteur ex. 1280x720)</string>
+    <string name="game_test_live">Tester en direct</string>
+    <string name="game_reset">Réinitialiser</string>
+    <string name="game_res_profile_title">Profil de résolution</string>
+    <string name="game_img_compactor_title">Compresseur d\'images</string>
+
+    <string name="btn_kill">Arrêter</string>
+    <string name="btn_freeze">Geler</string>
+    <string name="game_check_updates">Vérifier les mises à jour</string>
+    <string name="game_updates_title">État des mises à jour des jeux</string>
+    <string name="game_updates_desc">Versions des jeux installés. Les mises à jour ne sont pas téléchargées automatiquement ; cliquez pour ouvrir dans Google Play :</string>
+    <string name="game_open_store">Ouvrir dans Google Play</string>
+    <string name="shizuku_download_btn">Télécharger Shizuku</string>
+    <string name="shizuku_github_label">Dépôt GitHub Shizuku</string>
+    <string name="app_control_title">Contrôle des applications</string>
 </resources>

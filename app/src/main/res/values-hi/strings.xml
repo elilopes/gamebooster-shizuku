@@ -12,6 +12,7 @@
     <string name="tab_background">बैकग्राउंड ऐप्स</string>
     <string name="tab_boost_settings">बूस्ट सेटिंग्स</string>
     <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="menu_enable_thermal">Thermal monitor चालू करें</string>
     <string name="menu_disable_thermal">Thermal monitor बंद करें</string>
     <string name="thermal_monitor_warning">वैकल्पिक सुविधा: तापमान जांच सक्रिय है। रैम और बैटरी बचाने के लिए आप इसे मेनू से बंद कर सकते हैं।</string>
@@ -27,9 +28,51 @@
     <string name="boost_oom_desc">सिस्टम द्वारा गेम को बैकग्राउंड में बंद होने से बचाता है।</string>
     <string name="boost_adblock_title">गेम विज्ञापन अवरोधक (Shizuku DNS)</string>
     <string name="boost_adblock_desc">Shizuku Private DNS का उपयोग करके विज्ञापनों को ब्लॉक करता है।</string>
+    <string name="boost_warning_note">नोट: कुछ बूस्ट सेटिंग्स से डिवाइस गर्म हो सकता है।</string>
 
     <string name="ad_scan_button">विज्ञापन जांचें</string>
     <string name="ad_scan_title">गेम विज्ञापन निरीक्षक</string>
     <string name="ad_scan_clean">कोई विज्ञापन नेटवर्क नहीं मिला। गेम स्वच्छ है।</string>
     <string name="ad_scan_detected">पाए गए विज्ञापन SDK:</string>
+
+    <string name="img_opt_title">इमेज इंस्पेक्टर &amp; SD कंप्रेसर</string>
+    <string name="img_opt_pick">इमेज चुनें (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">SD में संकुचित करें</string>
+    <string name="img_opt_permanent">संकुचन को स्थायी करें</string>
+    <string name="img_opt_success">इमेज सफलतापूर्वक SD में संकुचित और सहेजी गई!</string>
+
+    <string name="img_compact_btn">इमेज कंप्रेस करें</string>
+    <string name="img_compact_success">इमेज सफलतापूर्वक संकुचित (%d अनुकूलित)।</string>
+    <string name="img_compact_none">कोई बड़ी इमेज नहीं मिली।</string>
+
+    <string name="kill_success">एप्लिकेशन सफलतापूर्वक समाप्त हो गया।</string>
+    <string name="kill_fail">एप्लिकेशन समाप्त करने में असमर्थ।</string>
+
+    <string name="game_native_resolution">मूल रिज़ॉल्यूशन</string>
+    <string name="game_shizuku_active">Shizuku सक्रिय है</string>
+    <string name="game_shizuku_authorize">Shizuku अधिकृत करें</string>
+    <string name="game_add_manually">मैन्युअल रूप से जोड़ें</string>
+    <string name="game_auto_scan">ऑटो स्कैन</string>
+    <string name="game_verify_ads">विज्ञापन जांचें</string>
+    <string name="game_launch">लॉन्च करें</string>
+    <string name="game_add_manual_title">गेम मैन्युअल रूप से जोड़ें</string>
+    <string name="game_app_name_label">ऐप का नाम</string>
+    <string name="game_pkg_name_label">पैकेज का नाम (उदा. com.game)</string>
+    <string name="game_save_permanent">स्थायी रूप से सहेजें</string>
+    <string name="game_test_res_desc">स्थायी रूप से सहेजने से पहले लाइव रिज़ॉल्यूशन परीक्षण करें:</string>
+    <string name="game_res_input_label">रिज़ॉल्यूशन (चौड़ाई x ऊँचाई उदा. 1280x720)</string>
+    <string name="game_test_live">लाइव परीक्षण</string>
+    <string name="game_reset">रीसेट करें</string>
+    <string name="game_res_profile_title">रिज़ॉल्यूशन प्रोफाइल</string>
+    <string name="game_img_compactor_title">इमेज कंप्रेसर</string>
+
+    <string name="btn_kill">समाप्त करें</string>
+    <string name="btn_freeze">फ्रीज करें</string>
+    <string name="game_check_updates">अपडेट जांचें</string>
+    <string name="game_updates_title">गेम अपडेट स्थिति</string>
+    <string name="game_updates_desc">इंस्टॉल किए गए गेम के संस्करण। अपडेट स्वचालित रूप से डाउनलोड नहीं होते हैं; सुरक्षित रूप से Google Play पर देखने के लिए क्लिक करें:</string>
+    <string name="game_open_store">Google Play में खोलें</string>
+    <string name="shizuku_download_btn">Shizuku डाउनलोड करें</string>
+    <string name="shizuku_github_label">Shizuku GitHub रिपॉजिटरी</string>
+    <string name="app_control_title">ऐप नियंत्रण</string>
 </resources>

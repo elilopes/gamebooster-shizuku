@@ -12,6 +12,7 @@
     <string name="tab_background">后台应用</string>
     <string name="tab_boost_settings">加速设置</string>
     <string name="tab_thermal_monitor">Thermal monitor</string>
+    <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="menu_enable_thermal">启用 Thermal monitor</string>
     <string name="menu_disable_thermal">停用 Thermal monitor</string>
     <string name="thermal_monitor_warning">可选功能：正在持续轮询温度。您可以随时在菜单中关闭此标签页以节省内存和电量。</string>
@@ -27,9 +28,51 @@
     <string name="boost_oom_desc">锁定游戏进程优先级，防止在后台被系统 OOM Killer 强行关闭。</string>
     <string name="boost_adblock_title">游戏广告拦截器 (Shizuku DNS)</string>
     <string name="boost_adblock_desc">使用 Shizuku Private DNS 在系统级拦截游戏中的广告网络（AdMob、Unity Ads、AppLovin 等）。</string>
+    <string name="boost_warning_note">注意：某些加速设置可能会导致设备过热。</string>
 
     <string name="ad_scan_button">检测广告</string>
     <string name="ad_scan_title">游戏广告检测器</string>
     <string name="ad_scan_clean">在此应用中未检测到已知广告 SDK，游戏很干净。</string>
     <string name="ad_scan_detected">在游戏中检测到的广告 SDK：</string>
+
+    <string name="img_opt_title">图像检查器 &amp; SD 压缩器</string>
+    <string name="img_opt_pick">选择图像 (SD/HD/FHD/4K)</string>
+    <string name="img_opt_compress">压缩至 SD</string>
+    <string name="img_opt_permanent">使压缩永久生效</string>
+    <string name="img_opt_success">图像成功压缩至 SD 并保存！</string>
+
+    <string name="img_compact_btn">压缩图像</string>
+    <string name="img_compact_success">图像压缩成功（已优化 %d 张图像）。</string>
+    <string name="img_compact_none">未找到大图像。</string>
+
+    <string name="kill_success">应用程序已成功终止。</string>
+    <string name="kill_fail">无法终止应用程序。</string>
+
+    <string name="game_native_resolution">原生分辨率</string>
+    <string name="game_shizuku_active">Shizuku 已激活</string>
+    <string name="game_shizuku_authorize">授权 Shizuku</string>
+    <string name="game_add_manually">手动添加</string>
+    <string name="game_auto_scan">自动扫描</string>
+    <string name="game_verify_ads">检测广告</string>
+    <string name="game_launch">启动</string>
+    <string name="game_add_manual_title">手动添加游戏</string>
+    <string name="game_app_name_label">应用名称</string>
+    <string name="game_pkg_name_label">包名 (例如 com.game)</string>
+    <string name="game_save_permanent">永久保存</string>
+    <string name="game_test_res_desc">在永久保存之前实时测试分辨率：</string>
+    <string name="game_res_input_label">分辨率 (宽 x 高，例如 1280x720)</string>
+    <string name="game_test_live">实时测试</string>
+    <string name="game_reset">重置</string>
+    <string name="game_res_profile_title">分辨率配置文件</string>
+    <string name="game_img_compactor_title">图像压缩器</string>
+
+    <string name="btn_kill">终止</string>
+    <string name="btn_freeze">冻结</string>
+    <string name="game_check_updates">检查更新</string>
+    <string name="game_updates_title">游戏更新状态</string>
+    <string name="game_updates_desc">已安装游戏版本。不会自动下载更新；点击可在 Google Play 中安全查看和更新：</string>
+    <string name="game_open_store">在 Google Play 中打开</string>
+    <string name="shizuku_download_btn">下载 Shizuku</string>
+    <string name="shizuku_github_label">Shizuku GitHub 仓库</string>
+    <string name="app_control_title">应用控制</string>
 </resources>

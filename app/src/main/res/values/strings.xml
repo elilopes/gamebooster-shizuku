@@ -82,4 +82,6 @@
     <string name="shizuku_download_btn">Download Shizuku</string>
     <string name="shizuku_github_label">Shizuku GitHub Repository</string>
     <string name="app_control_title">App Control</string>
+    <string name="shizuku_link_url">https://github.com/RikkaApps/Shizuku-API</string>
+    <string name="game_version_label">Version: %s</string>
 </resources>

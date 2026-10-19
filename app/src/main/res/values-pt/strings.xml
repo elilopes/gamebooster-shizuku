@@ -75,4 +75,11 @@
     <string name="shizuku_download_btn">Baixar Shizuku</string>
     <string name="shizuku_github_label">Repositório GitHub do Shizuku</string>
     <string name="app_control_title">Controle de Apps</string>
+    <string name="backup_btn">Backup</string>
+    <string name="backup_dialog_title">Backup do App e Arquivos</string>
+    <string name="backup_apk">Fazer backup do APK</string>
+    <string name="backup_obb">Fazer backup da pasta OBB</string>
+    <string name="backup_data">Fazer backup da pasta Data</string>
+    <string name="backup_zip_option">Compactar como ZIP (Recomendado)</string>
+    <string name="backup_start">Iniciar Backup</string>
 </resources>

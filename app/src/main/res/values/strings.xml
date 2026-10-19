@@ -84,4 +84,11 @@
     <string name="app_control_title">App Control</string>
     <string name="shizuku_link_url">https://github.com/RikkaApps/Shizuku-API</string>
     <string name="game_version_label">Version: %s</string>
+    <string name="backup_btn">Backup</string>
+    <string name="backup_dialog_title">Backup App &amp; Files</string>
+    <string name="backup_apk">Backup APK</string>
+    <string name="backup_obb">Backup OBB Folder</string>
+    <string name="backup_data">Backup Data Folder</string>
+    <string name="backup_zip_option">Compress as ZIP (Recommended)</string>
+    <string name="backup_start">Start Backup</string>
 </resources>

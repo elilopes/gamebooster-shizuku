@@ -13,6 +13,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.os.Environment
 import java.io.File
 
 data class GameApp(
@@ -172,6 +174,74 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             app.startActivity(webIntent)
+        }
+    }
+
+    fun backupApp(packageName: String, includeApk: Boolean, includeObb: Boolean, includeData: Boolean, compressZip: Boolean, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!ShizukuHelper.hasPermission()) {
+                    withContext(Dispatchers.Main) { onResult(false, "Shizuku permission required for backup.") }
+                    return@launch
+                }
+                val backupDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "GameBoosterBackups")
+                if (!backupDir.exists()) backupDir.mkdirs()
+
+                val timestamp = System.currentTimeMillis()
+                val targetFolder = File(backupDir, "${packageName}_$timestamp")
+                targetFolder.mkdirs()
+
+                val commands = mutableListOf<String>()
+
+                if (includeApk) {
+                    val apkPathCmd = "pm path $packageName"
+                    val apkPathOut = ShizukuHelper.executeCommand(apkPathCmd).trim()
+                    val paths = apkPathOut.lines().map { it.removePrefix("package:").trim() }.filter { it.isNotEmpty() }
+                    for ((index, path) in paths.withIndex()) {
+                        val destName = if (paths.size == 1) "base.apk" else "base_$index.apk"
+                        commands.add("cp \"$path\" \"${targetFolder.absolutePath}/$destName\"")
+                    }
+                }
+
+                if (includeObb) {
+                    val obbDir = File("/sdcard/Android/obb/$packageName")
+                    if (obbDir.exists()) {
+                        commands.add("cp -r \"${obbDir.absolutePath}\" \"${targetFolder.absolutePath}/obb\"")
+                    }
+                }
+
+                if (includeData) {
+                    val sdDataDir = File("/sdcard/Android/data/$packageName")
+                    if (sdDataDir.exists()) {
+                        commands.add("cp -r \"${sdDataDir.absolutePath}\" \"${targetFolder.absolutePath}/data\"")
+                    }
+                    val internalDataDir = File("/data/data/$packageName")
+                    if (internalDataDir.exists()) {
+                        commands.add("cp -r \"${internalDataDir.absolutePath}\" \"${targetFolder.absolutePath}/internal_data\"")
+                    }
+                }
+
+                for (cmd in commands) {
+                    ShizukuHelper.executeCommand(cmd)
+                }
+
+                var finalPath = targetFolder.absolutePath
+                if (compressZip) {
+                    val zipFile = File(backupDir, "${packageName}_$timestamp.zip")
+                    val zipCmd = "cd \"${targetFolder.absolutePath}\" && zip -r \"${zipFile.absolutePath}\" ."
+                    ShizukuHelper.executeCommand(zipCmd)
+                    targetFolder.deleteRecursively()
+                    finalPath = zipFile.absolutePath
+                }
+
+                withContext(Dispatchers.Main) {
+                    onResult(true, "Backup saved to: $finalPath")
+                }
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    onResult(false, "Backup failed: ${e.message}")
+                }
+            }
         }
     }
 

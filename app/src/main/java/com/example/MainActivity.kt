@@ -479,6 +479,14 @@ fun GameListTab(viewModel: GameViewModel) {
 
     var customResolutionInput by remember { mutableStateOf("1280x720") }
 
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var backupTargetGame by remember { mutableStateOf<GameApp?>(null) }
+    var includeApk by remember { mutableStateOf(true) }
+    var includeObb by remember { mutableStateOf(true) }
+    var includeData by remember { mutableStateOf(true) }
+    var compressZip by remember { mutableStateOf(true) }
+    var backupResultMsg by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         item {
             Card(
@@ -625,6 +633,18 @@ fun GameListTab(viewModel: GameViewModel) {
 
                         OutlinedButton(
                             onClick = {
+                                backupTargetGame = game
+                                showBackupDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(stringResource(id = R.string.backup_btn))
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        OutlinedButton(
+                            onClick = {
                                 adScanResult = viewModel.scanGameAds(game.packageName)
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -700,6 +720,65 @@ fun GameListTab(viewModel: GameViewModel) {
             text = { Text(compactResultMsg!!) },
             confirmButton = {
                 TextButton(onClick = { compactResultMsg = null }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
+    }
+
+    if (showBackupDialog && backupTargetGame != null) {
+        AlertDialog(
+            onDismissRequest = { showBackupDialog = false },
+            title = { Text(stringResource(id = R.string.backup_dialog_title)) },
+            text = {
+                Column {
+                    Text(text = backupTargetGame!!.name, style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeApk, onCheckedChange = { includeApk = it })
+                        Text(stringResource(id = R.string.backup_apk))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeObb, onCheckedChange = { includeObb = it })
+                        Text(stringResource(id = R.string.backup_obb))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeData, onCheckedChange = { includeData = it })
+                        Text(stringResource(id = R.string.backup_data))
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = compressZip, onCheckedChange = { compressZip = it })
+                        Text(stringResource(id = R.string.backup_zip_option), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val pkg = backupTargetGame!!.packageName
+                    showBackupDialog = false
+                    viewModel.backupApp(pkg, includeApk, includeObb, includeData, compressZip) { success, msg ->
+                        backupResultMsg = msg
+                    }
+                }) {
+                    Text(stringResource(id = R.string.backup_start))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupDialog = false }) {
+                    Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (backupResultMsg != null) {
+        AlertDialog(
+            onDismissRequest = { backupResultMsg = null },
+            title = { Text("Backup") },
+            text = { Text(backupResultMsg!!) },
+            confirmButton = {
+                Button(onClick = { backupResultMsg = null }) {
                     Text(stringResource(id = R.string.ok))
                 }
             }

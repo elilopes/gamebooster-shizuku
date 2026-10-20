@@ -35,6 +35,7 @@
     <string name="boost_oom_desc">Sets the game process priority to be immune to the Android OOM Killer, preventing it from being closed in the background.</string>
     <string name="boost_adblock_title">Game Ad Blocker (Shizuku DNS)</string>
     <string name="boost_adblock_desc">Blocks ad networks (Google AdMob, Unity Ads, AppLovin) system-wide using Shizuku Private DNS.</string>
+    <string name="boost_adblock_realtime">Real-time Ad Monitoring</string>
     <string name="boost_warning_note">Note: some acceleration settings may cause the device to overheat.</string>
 
     <string name="ad_scan_button">Check Ads</string>
@@ -91,4 +92,9 @@
     <string name="backup_data">Backup Data Folder</string>
     <string name="backup_zip_option">Compress as ZIP (Recommended)</string>
     <string name="backup_start">Start Backup</string>
+    <string name="cleanup_title">Cleanup</string>
+    <string name="cleanup_btn">Clean Game Cache</string>
+    <string name="move_obb_btn">Move OBB to SD</string>
+    <string name="virtual_mem_btn">Increase Virtual Mem (ZRAM)</string>
+    <string name="virtual_mem_warning">Warning: This operation may cause system instability or data corruption. Use with caution.</string>
 </resources>

@@ -12,11 +12,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Security
@@ -78,21 +81,31 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ShizukuStatusBadge() {
-    val isActive = remember { mutableStateOf(ShizukuHelper.hasPermission()) }
+fun SystemStatusBadge() {
+    val isShizukuActive = remember { mutableStateOf(ShizukuHelper.hasPermission()) }
+    val isRootActive = remember { mutableStateOf(ShizukuHelper.isRootAvailable()) }
+    
     LaunchedEffect(Unit) {
-        isActive.value = ShizukuHelper.hasPermission()
+        isShizukuActive.value = ShizukuHelper.hasPermission()
+        isRootActive.value = ShizukuHelper.isRootAvailable()
+    }
+
+    val isActive = isShizukuActive.value || isRootActive.value
+    val statusText = when {
+        isRootActive.value -> "Root: ON"
+        isShizukuActive.value -> "Shizuku: ON"
+        else -> "Root/Shizuku: OFF"
     }
 
     Surface(
-        color = if (isActive.value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
         shape = MaterialTheme.shapes.small
     ) {
         Text(
-            text = if (isActive.value) "Shizuku: ON" else "Shizuku: OFF",
+            text = statusText,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            color = if (isActive.value) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
         )
     }
 }
@@ -138,7 +151,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                 }
             },
             actions = {
-                ShizukuStatusBadge()
+                SystemStatusBadge()
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Menu")
@@ -583,10 +596,27 @@ fun GameListTab(viewModel: GameViewModel) {
                     }
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = game.name,
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = game.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.removeGame(game.packageName) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Remove App",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
@@ -611,10 +641,22 @@ fun GameListTab(viewModel: GameViewModel) {
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        OutlinedButton(
+                            onClick = { viewModel.cleanGameCache(game.packageName) { _, msg -> compactResultMsg = msg } },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(stringResource(id = R.string.cleanup_btn))
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.moveObbToSd(game.packageName) { _, msg -> compactResultMsg = msg } },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(stringResource(id = R.string.move_obb_btn))
+                        }
                         OutlinedButton(
                             onClick = {
                                 val count = viewModel.compactGameImages(game.packageName)
@@ -629,8 +671,6 @@ fun GameListTab(viewModel: GameViewModel) {
                             Text(stringResource(id = R.string.img_compact_btn))
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
-
                         OutlinedButton(
                             onClick = {
                                 backupTargetGame = game
@@ -640,8 +680,6 @@ fun GameListTab(viewModel: GameViewModel) {
                         ) {
                             Text(stringResource(id = R.string.backup_btn))
                         }
-
-                        Spacer(modifier = Modifier.width(4.dp))
 
                         OutlinedButton(
                             onClick = {
@@ -657,8 +695,6 @@ fun GameListTab(viewModel: GameViewModel) {
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(stringResource(id = R.string.game_verify_ads))
                         }
-
-                        Spacer(modifier = Modifier.width(4.dp))
 
                         Button(
                             onClick = { viewModel.launchGame(game.packageName) },
@@ -996,7 +1032,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
             onInfoClick = { showInfoDialog = it }
         )
         SettingItem(
-            title = "Real-time Background Ad Monitoring",
+            title = stringResource(id = R.string.boost_adblock_realtime),
             checked = adBlockerRealtime,
             onCheckedChange = { viewModel.toggleAdBlockerRealtime(it) },
             titleRes = R.string.boost_adblock_title,
@@ -1035,6 +1071,26 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
             descRes = R.string.boost_oom_desc,
             onInfoClick = { showInfoDialog = it }
         )
+        
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = stringResource(id = R.string.virtual_mem_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Button(
+                    onClick = { viewModel.increaseVirtualMemory(1024) { _, msg -> /* show msg */ } },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(id = R.string.virtual_mem_btn))
+                }
+            }
+        }
     }
 
     if (showInfoDialog != null) {

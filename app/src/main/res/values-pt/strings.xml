@@ -82,4 +82,9 @@
     <string name="backup_data">Fazer backup da pasta Data</string>
     <string name="backup_zip_option">Compactar como ZIP (Recomendado)</string>
     <string name="backup_start">Iniciar Backup</string>
+    <string name="cleanup_title">Limpeza</string>
+    <string name="cleanup_btn">Limpar Cache do Jogo</string>
+    <string name="move_obb_btn">Mover OBB para SD</string>
+    <string name="virtual_mem_btn">Aumentar Memória Virtual (ZRAM)</string>
+    <string name="virtual_mem_warning">Aviso: Esta operação pode causar instabilidade no sistema ou corrupção de dados. Use com cuidado.</string>
 </resources>

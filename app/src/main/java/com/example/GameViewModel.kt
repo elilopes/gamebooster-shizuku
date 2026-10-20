@@ -245,6 +245,52 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun cleanGameCache(packageName: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val paths = listOf(
+                    "/data/data/$packageName/cache",
+                    "/data/data/$packageName/code_cache",
+                    "/sdcard/Android/data/$packageName/cache"
+                )
+                for (path in paths) {
+                    ShizukuHelper.executeCommand("rm -rf $path/*")
+                }
+                withContext(Dispatchers.Main) { onResult(true, "Cache cleared successfully.") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false, "Cleanup failed: ${e.message}") }
+            }
+        }
+    }
+
+    fun moveObbToSd(packageName: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val source = "/sdcard/Android/obb/$packageName"
+                val target = "/sdcard/Android/obb/Archive/$packageName"
+                ShizukuHelper.executeCommand("mkdir -p /sdcard/Android/obb/Archive")
+                ShizukuHelper.executeCommand("mv $source $target")
+                withContext(Dispatchers.Main) { onResult(true, "OBB moved successfully.") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false, "Move failed: ${e.message}") }
+            }
+        }
+    }
+
+    fun increaseVirtualMemory(sizeMb: Int, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val sizeBytes = sizeMb.toLong() * 1024 * 1024
+                ShizukuHelper.executeCommand("echo $sizeBytes > /sys/block/zram0/disksize")
+                ShizukuHelper.executeCommand("mkswap /dev/block/zram0")
+                ShizukuHelper.executeCommand("swapon /dev/block/zram0")
+                withContext(Dispatchers.Main) { onResult(true, "Virtual memory increased.") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false, "Failed to increase VM: ${e.message}") }
+            }
+        }
+    }
+
     fun autoScanAndAddGames() {
         viewModelScope.launch(Dispatchers.IO) {
             loadGames()
@@ -355,6 +401,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             db.gameProfileDao().insertProfile(GameProfile(packageName, resolution, density))
             loadGames()
         }
+    }
+
+    fun removeGame(packageName: String) {
+        _games.value = _games.value.filter { it.packageName != packageName }
     }
 
     override fun onCleared() {

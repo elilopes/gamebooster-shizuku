@@ -49,4 +49,13 @@ object ShizukuHelper {
             "Error: ${e.message}"
         }
     }
+
+    fun isRootAvailable(): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec("su -c exit")
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

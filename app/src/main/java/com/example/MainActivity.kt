@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.widget.Toast
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
@@ -29,9 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import rikka.shizuku.Shizuku
@@ -121,7 +126,8 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
         stringResource(id = R.string.tab_games),
         stringResource(id = R.string.tab_background),
         stringResource(id = R.string.tab_boost_settings),
-        stringResource(id = R.string.tab_image_optimizer)
+        stringResource(id = R.string.tab_image_optimizer),
+        stringResource(id = R.string.tab_scripts)
     )
 
     val tabs = if (thermalMonitorEnabled) {
@@ -135,6 +141,8 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     var showMenu by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showHardwareDialog by remember { mutableStateOf(false) }
+    var hardwareReportText by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -181,6 +189,14 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                         }
                     )
                     DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.menu_export_hardware)) },
+                        onClick = {
+                            hardwareReportText = HardwareHelper.getHardwareInfo(context)
+                            showHardwareDialog = true
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text(stringResource(id = R.string.menu_about)) },
                         onClick = {
                             showAbout = true
@@ -211,6 +227,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             currentTabTitle == stringResource(id = R.string.tab_background) -> BackgroundAppsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_image_optimizer) -> ImageOptimizerTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_scripts) -> ScriptsTab(viewModel)
             else -> GameListTab(viewModel)
         }
     }
@@ -319,6 +336,39 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             }
         )
     }
+
+    if (showHardwareDialog) {
+        AlertDialog(
+            onDismissRequest = { showHardwareDialog = false },
+            title = { Text(stringResource(id = R.string.menu_export_hardware)) },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                    item {
+                        Text(
+                            text = hardwareReportText,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.exportHardwareReport { file ->
+                        val msg = if (file != null) context.getString(R.string.hardware_export_success) else context.getString(R.string.hardware_export_fail)
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    }
+                    showHardwareDialog = false
+                }) {
+                    Text(stringResource(id = R.string.hardware_export_btn))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHardwareDialog = false }) {
+                    Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -332,9 +382,23 @@ fun ThermalMonitorTab(viewModel: GameViewModel) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.thermal_monitor_header),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Switch(
+                        checked = viewModel.autoMemoryRelease.collectAsState().value,
+                        onCheckedChange = { viewModel.autoMemoryRelease.value = it }
+                    )
+                }
                 Text(
-                    text = stringResource(id = R.string.thermal_monitor_header),
-                    style = MaterialTheme.typography.titleMedium
+                    text = stringResource(id = R.string.auto_memory_release_desc),
+                    style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 val tempText = if (temp > 0f) String.format("Battery Temp: %.1f°C", temp) else "Battery Temp: --°C"
@@ -484,6 +548,9 @@ fun GameListTab(viewModel: GameViewModel) {
     var showDialog by remember { mutableStateOf(false) }
     var showUpdatesDialog by remember { mutableStateOf(false) }
     var adScanResult by remember { mutableStateOf<AdBlockHelper.AdScanResult?>(null) }
+    var integrityScanResult by remember { mutableStateOf<GameIntegrityHelper.IntegritySystemResult?>(null) }
+    var pakBundleReport by remember { mutableStateOf<GameIntegrityHelper.PakBundleCompressionReport?>(null) }
+    var isCompressingPakBundle by remember { mutableStateOf(false) }
     var compactResultMsg by remember { mutableStateOf<String?>(null) }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
@@ -491,6 +558,7 @@ fun GameListTab(viewModel: GameViewModel) {
     var manualName by remember { mutableStateOf("") }
 
     var customResolutionInput by remember { mutableStateOf("1280x720") }
+    var customDensityInput by remember { mutableStateOf("320") }
 
     var showBackupDialog by remember { mutableStateOf(false) }
     var backupTargetGame by remember { mutableStateOf<GameApp?>(null) }
@@ -501,6 +569,19 @@ fun GameListTab(viewModel: GameViewModel) {
     var backupResultMsg by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = stringResource(id = R.string.hardware_warning_disclaimer),
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -591,6 +672,7 @@ fun GameListTab(viewModel: GameViewModel) {
                         if (ShizukuHelper.hasPermission()) {
                             selectedGame = game
                             customResolutionInput = game.profile?.resolution ?: "1280x720"
+                            customDensityInput = (game.profile?.density ?: viewModel.getNativeDensity()).toString()
                             showDialog = true
                         }
                     }
@@ -640,23 +722,39 @@ fun GameListTab(viewModel: GameViewModel) {
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    val cardBtnStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp)
+                    val cardBtnPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
-                            onClick = { viewModel.cleanGameCache(game.packageName) { _, msg -> compactResultMsg = msg } },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            onClick = {
+                                selectedGame = game
+                                customResolutionInput = game.profile?.resolution ?: "1280x720"
+                                customDensityInput = (game.profile?.density ?: viewModel.getNativeDensity()).toString()
+                                showDialog = true
+                            },
+                            contentPadding = cardBtnPadding
                         ) {
-                            Text(stringResource(id = R.string.cleanup_btn))
+                            Text(stringResource(id = R.string.game_resolution_btn), style = cardBtnStyle)
                         }
+
+                        OutlinedButton(
+                            onClick = { viewModel.cleanGameCache(game.packageName) { _, msg -> compactResultMsg = msg } },
+                            contentPadding = cardBtnPadding
+                        ) {
+                            Text(stringResource(id = R.string.cleanup_btn), style = cardBtnStyle)
+                        }
+
                         OutlinedButton(
                             onClick = { viewModel.moveObbToSd(game.packageName) { _, msg -> compactResultMsg = msg } },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = cardBtnPadding
                         ) {
-                            Text(stringResource(id = R.string.move_obb_btn))
+                            Text(stringResource(id = R.string.move_obb_btn), style = cardBtnStyle)
                         }
+
                         OutlinedButton(
                             onClick = {
                                 val count = viewModel.compactGameImages(game.packageName)
@@ -666,9 +764,24 @@ fun GameListTab(viewModel: GameViewModel) {
                                     context.getString(R.string.img_compact_none)
                                 }
                             },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = cardBtnPadding
                         ) {
-                            Text(stringResource(id = R.string.img_compact_btn))
+                            Text(stringResource(id = R.string.img_compact_btn), style = cardBtnStyle)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                integrityScanResult = viewModel.checkGameIntegritySystem(game.packageName)
+                            },
+                            contentPadding = cardBtnPadding
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(stringResource(id = R.string.game_integrity_btn), style = cardBtnStyle)
                         }
 
                         OutlinedButton(
@@ -676,31 +789,31 @@ fun GameListTab(viewModel: GameViewModel) {
                                 backupTargetGame = game
                                 showBackupDialog = true
                             },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = cardBtnPadding
                         ) {
-                            Text(stringResource(id = R.string.backup_btn))
+                            Text(stringResource(id = R.string.backup_btn), style = cardBtnStyle)
                         }
 
                         OutlinedButton(
                             onClick = {
                                 adScanResult = viewModel.scanGameAds(game.packageName)
                             },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = cardBtnPadding
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Security,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(2.dp))
-                            Text(stringResource(id = R.string.game_verify_ads))
+                            Text(stringResource(id = R.string.game_verify_ads), style = cardBtnStyle)
                         }
 
                         Button(
                             onClick = { viewModel.launchGame(game.packageName) },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                         ) {
-                            Text(stringResource(id = R.string.game_launch))
+                            Text(stringResource(id = R.string.game_launch), style = cardBtnStyle)
                         }
                     }
                 }
@@ -836,6 +949,38 @@ fun GameListTab(viewModel: GameViewModel) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text("Presets:", style = MaterialTheme.typography.labelSmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("1080x1920", "720x1280", "480x854", "360x640", "240x426").forEach { res ->
+                            OutlinedButton(
+                                onClick = { customResolutionInput = res },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(res, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customDensityInput,
+                        onValueChange = { customDensityInput = it },
+                        label = { Text("Density (DPI)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val recommended = viewModel.calculatePurrDpi(customResolutionInput.trim())
+                            customDensityInput = recommended.toString()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.purr_auto_dpi_btn))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -858,8 +1003,9 @@ fun GameListTab(viewModel: GameViewModel) {
             confirmButton = {
                 TextButton(onClick = {
                     val parts = customResolutionInput.trim().split("x")
+                    val dpi = customDensityInput.trim().toIntOrNull() ?: 320
                     if (parts.size == 2) {
-                        viewModel.saveProfile(selectedGame!!.packageName, customResolutionInput.trim(), 320)
+                        viewModel.saveProfile(selectedGame!!.packageName, customResolutionInput.trim(), dpi)
                     }
                     showDialog = false
                 }) {
@@ -911,6 +1057,185 @@ fun GameListTab(viewModel: GameViewModel) {
         )
     }
 
+    if (integrityScanResult != null) {
+        val result = integrityScanResult!!
+        AlertDialog(
+            onDismissRequest = { integrityScanResult = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = if (result.hasIntegritySystem) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.game_integrity_dialog_title))
+                }
+            },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                    item {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = if (result.hasIntegritySystem) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        ) {
+                            Text(
+                                text = if (result.hasIntegritySystem) stringResource(id = R.string.game_integrity_detected) else stringResource(id = R.string.game_integrity_not_detected),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (result.hasIntegritySystem) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+
+                        Text(
+                            text = result.summary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (result.detectedMechanisms.isNotEmpty()) {
+                            Text(
+                                text = stringResource(id = R.string.game_integrity_mechanisms_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            result.detectedMechanisms.forEach { mech ->
+                                Text(
+                                    text = "• $mech",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        if (result.detectedFiles.isNotEmpty()) {
+                            Text(
+                                text = stringResource(id = R.string.game_integrity_manifests_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            result.detectedFiles.forEach { fileInfo ->
+                                Text(
+                                    text = "• $fileInfo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        if (!result.hasIntegritySystem) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(
+                                        text = stringResource(id = R.string.pak_bundle_safe_notice),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = {
+                                            isCompressingPakBundle = true
+                                            viewModel.compressPakAndBundle(result.packageName) { report ->
+                                                isCompressingPakBundle = false
+                                                pakBundleReport = report
+                                            }
+                                        },
+                                        enabled = !isCompressingPakBundle,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (isCompressingPakBundle) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+                                        Text(stringResource(id = R.string.compact_pak_bundle_btn))
+                                    }
+                                }
+                            }
+                        } else {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.pak_bundle_blocked_notice),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { integrityScanResult = null }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
+    }
+
+    if (pakBundleReport != null) {
+        val report = pakBundleReport!!
+        AlertDialog(
+            onDismissRequest = { pakBundleReport = null },
+            title = { Text(stringResource(id = R.string.pak_bundle_compression_title)) },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+                    item {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Arquivos processados: ${report.compressedFiles}/${report.totalFilesFound}",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    text = "Tamanho original: ${String.format(java.util.Locale.US, "%.1f", report.originalSizeMb)} MB",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "Economia estimada: ${String.format(java.util.Locale.US, "%.1f", report.spaceSavedMb)} MB",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Text("Detalhes por arquivo:", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        report.details.forEach { detail ->
+                            Text(
+                                text = "• $detail",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pakBundleReport = null }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
+    }
+
     if (showUpdatesDialog) {
         AlertDialog(
             onDismissRequest = { showUpdatesDialog = false },
@@ -956,32 +1281,62 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
     val context = LocalContext.current
     val backgroundApps by viewModel.backgroundApps.collectAsState()
     var killAlertMsg by remember { mutableStateOf<String?>(null) }
+    var blockedApps by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(Unit) {
         viewModel.scanBackgroundApps()
     }
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
+        item {
+            Button(
+                onClick = { viewModel.killAllApps() },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Text("Kill All Background Apps")
+            }
+        }
         items(backgroundApps) { app ->
-            ListItem(
-                headlineContent = { Text(app.name) },
-                supportingContent = { Text("Mem: ${app.memUsage}") },
-                trailingContent = {
-                    Row {
-                        TextButton(onClick = {
-                            val success = viewModel.killApp(app.packageName)
-                            killAlertMsg = if (success) {
-                                context.getString(R.string.kill_success)
-                            } else {
-                                context.getString(R.string.kill_fail)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                ListItem(
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                    headlineContent = { Text(app.name, style = MaterialTheme.typography.bodyMedium) },
+                    supportingContent = { Text("Mem: ${app.memUsage}", style = MaterialTheme.typography.bodySmall) },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = {
+                                val isBlocked = blockedApps.contains(app.packageName)
+                                viewModel.toggleInternet(app.packageName, !isBlocked)
+                                blockedApps = if (isBlocked) blockedApps - app.packageName else blockedApps + app.packageName
+                            }) {
+                                Icon(
+                                    imageVector = if (blockedApps.contains(app.packageName)) Icons.Default.LockOpen else Icons.Default.Lock,
+                                    contentDescription = "Internet Control"
+                                )
                             }
-                        }) { Text(stringResource(id = R.string.btn_kill)) }
-                        TextButton(onClick = { viewModel.freezeApp(app.packageName) }) {
-                            Text(stringResource(id = R.string.btn_freeze))
+                            TextButton(onClick = {
+                                val success = viewModel.killApp(app.packageName)
+                                killAlertMsg = if (success) {
+                                    context.getString(R.string.kill_success)
+                                } else {
+                                    context.getString(R.string.kill_fail)
+                                }
+                            }) { Text(stringResource(id = R.string.btn_kill)) }
+                            TextButton(onClick = { viewModel.freezeApp(app.packageName) }) {
+                                Text(stringResource(id = R.string.btn_freeze))
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -1007,8 +1362,18 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     val oomImmortal by viewModel.oomImmortal.collectAsState()
     val adBlockerEnabled by viewModel.adBlockerEnabled.collectAsState()
     val adBlockerRealtime by viewModel.adBlockerRealtime.collectAsState()
+    val disableAnimations by viewModel.disableAnimations.collectAsState()
+    val highTouchSampling by viewModel.highTouchSampling.collectAsState()
+    val limitBackgroundProcesses by viewModel.limitBackgroundProcesses.collectAsState()
+    val blockAutoRestart by viewModel.blockAutoRestart.collectAsState()
+    val forceDeepSleepCache by viewModel.forceDeepSleepCache.collectAsState()
+    val forceMaxCpu by viewModel.forceMaxCpu.collectAsState()
+    val forceMaxGpu by viewModel.forceMaxGpu.collectAsState()
 
     var showInfoDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var showVmDialog by remember { mutableStateOf(false) }
+    var vmResultMsg by remember { mutableStateOf<String?>(null) }
+    var deepSleepResultMsg by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Card(
@@ -1021,6 +1386,72 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
+        }
+
+        SettingItem(
+            title = stringResource(id = R.string.boost_max_cpu_title),
+            checked = forceMaxCpu,
+            onCheckedChange = { viewModel.toggleForceMaxCpu(it) },
+            titleRes = R.string.boost_max_cpu_title,
+            descRes = R.string.boost_max_cpu_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_max_gpu_title),
+            checked = forceMaxGpu,
+            onCheckedChange = { viewModel.toggleForceMaxGpu(it) },
+            titleRes = R.string.boost_max_gpu_title,
+            descRes = R.string.boost_max_gpu_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+
+        SettingItem(
+            title = stringResource(id = R.string.boost_animations_title),
+            checked = disableAnimations,
+            onCheckedChange = { viewModel.toggleDisableAnimations(it) },
+            titleRes = R.string.boost_animations_title,
+            descRes = R.string.boost_animations_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_touch_sampling_title),
+            checked = highTouchSampling,
+            onCheckedChange = { viewModel.toggleHighTouchSampling(it) },
+            titleRes = R.string.boost_touch_sampling_title,
+            descRes = R.string.boost_touch_sampling_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_limit_bg_title),
+            checked = limitBackgroundProcesses,
+            onCheckedChange = { viewModel.toggleLimitBackgroundProcesses(it) },
+            titleRes = R.string.boost_limit_bg_title,
+            descRes = R.string.boost_limit_bg_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_block_autorestart_title),
+            checked = blockAutoRestart,
+            onCheckedChange = { viewModel.toggleBlockAutoRestart(it) },
+            titleRes = R.string.boost_block_autorestart_title,
+            descRes = R.string.boost_block_autorestart_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_deep_sleep_title),
+            checked = forceDeepSleepCache,
+            onCheckedChange = { viewModel.toggleForceDeepSleepCache(it) },
+            titleRes = R.string.boost_deep_sleep_title,
+            descRes = R.string.boost_deep_sleep_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        OutlinedButton(
+            onClick = {
+                viewModel.executeDeepSleepNow { _, msg -> deepSleepResultMsg = msg }
+            },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Text(stringResource(id = R.string.boost_deep_sleep_btn))
         }
 
         SettingItem(
@@ -1084,7 +1515,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Button(
-                    onClick = { viewModel.increaseVirtualMemory(1024) { _, msg -> /* show msg */ } },
+                    onClick = { showVmDialog = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(id = R.string.virtual_mem_btn))
@@ -1093,7 +1524,41 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
         }
     }
 
+    if (showVmDialog) {
+        AlertDialog(
+            onDismissRequest = { showVmDialog = false },
+            title = { Text(stringResource(id = R.string.virtual_mem_btn)) },
+            text = { Text("Are you sure you want to increase virtual memory by 1GB? This operation is persistent and should be used with caution.") },
+            confirmButton = {
+                Button(onClick = {
+                    showVmDialog = false
+                    viewModel.increaseVirtualMemory(1024) { _, msg -> vmResultMsg = msg }
+                }) { Text("Confirm") }
+            },
+            dismissButton = { TextButton(onClick = { showVmDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (vmResultMsg != null) {
+        AlertDialog(
+            onDismissRequest = { vmResultMsg = null },
+            title = { Text("Virtual Memory") },
+            text = { Text(vmResultMsg!!) },
+            confirmButton = { TextButton(onClick = { vmResultMsg = null }) { Text("OK") } }
+        )
+    }
+
+    if (deepSleepResultMsg != null) {
+        AlertDialog(
+            onDismissRequest = { deepSleepResultMsg = null },
+            title = { Text(stringResource(id = R.string.boost_deep_sleep_title)) },
+            text = { Text(deepSleepResultMsg!!) },
+            confirmButton = { TextButton(onClick = { deepSleepResultMsg = null }) { Text(stringResource(id = R.string.ok)) } }
+        )
+    }
+
     if (showInfoDialog != null) {
+        // ...
         AlertDialog(
             onDismissRequest = { showInfoDialog = null },
             title = { Text(showInfoDialog!!.first) },
@@ -1134,4 +1599,78 @@ fun SettingItem(
             )
         }
     )
+}
+
+@Composable
+fun ScriptsTab(viewModel: GameViewModel) {
+    var scriptContent by remember { mutableStateOf("# Exemplo de Script / Game Tuner Shell\n# wm size 720x1280\n# settings put global animator_duration_scale 0.0") }
+    var executionOutput by remember { mutableStateOf<String?>(null) }
+    var isRunning by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
+        Text(
+            text = stringResource(id = R.string.scripts_tab_title),
+            style = MaterialTheme.typography.titleLarge
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(id = R.string.scripts_tab_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = scriptContent,
+            onValueChange = { scriptContent = it },
+            label = { Text("Script (.sh)") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+            textStyle = MaterialTheme.typography.bodySmall
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = {
+                if (scriptContent.isNotBlank()) {
+                    isRunning = true
+                    viewModel.runCustomScript(scriptContent) { out ->
+                        executionOutput = out
+                        isRunning = false
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isRunning
+        ) {
+            Text(stringResource(id = R.string.scripts_run_btn))
+        }
+
+        if (executionOutput != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
+                    Text(
+                        text = stringResource(id = R.string.scripts_output_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyColumn {
+                        item {
+                            Text(
+                                text = executionOutput!!,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

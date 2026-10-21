@@ -31,6 +31,16 @@
     <string name="pak_bundle_compression_title">.pak &amp; .bundle Compression</string>
     <string name="pak_bundle_safe_notice">No integrity verification system detected. Safe to compress .pak and .bundle assets without detection issues.</string>
     <string name="pak_bundle_blocked_notice">Active integrity system detected. Compression is blocked to prevent data mismatch or bans.</string>
+    <string name="gfx_tuner_title">GFX Tuner / Potato Mode</string>
+    <string name="gfx_tuner_btn">GFX Tuner</string>
+    <string name="gfx_extreme_potato">Ultra Potato Mode (All Effects Minimal)</string>
+    <string name="gfx_disable_shadows">Disable Shadows &amp; Lighting</string>
+    <string name="gfx_reduce_polygons">Reduce Polygons &amp; Mesh LOD</string>
+    <string name="gfx_disable_water">Disable Water &amp; Reflection Shaders</string>
+    <string name="gfx_disable_explosions">Reduce Explosions &amp; Particles</string>
+    <string name="gfx_mute_audio">Mute Game Audio &amp; Sounds</string>
+    <string name="gfx_apply_now">Apply GFX Now</string>
+    <string name="gfx_engine_note">Engine: %s (Unity/Zooba or Unreal Engine optimization)</string>
     <string name="scripts_tab_title">Custom Shell Scripts (.sh)</string>
     <string name="scripts_tab_desc">Execute custom shell scripts or Game Tuner scripts with Shizuku privileges:</string>
     <string name="scripts_run_btn">Run Script</string>

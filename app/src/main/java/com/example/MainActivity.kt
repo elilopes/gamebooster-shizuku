@@ -552,6 +552,10 @@ fun GameListTab(viewModel: GameViewModel) {
     var pakBundleReport by remember { mutableStateOf<GameIntegrityHelper.PakBundleCompressionReport?>(null) }
     var isCompressingPakBundle by remember { mutableStateOf(false) }
     var compactResultMsg by remember { mutableStateOf<String?>(null) }
+    var showGfxDialog by remember { mutableStateOf(false) }
+    var selectedGfxGame by remember { mutableStateOf<GameApp?>(null) }
+    var currentGfxConfig by remember { mutableStateOf(GfxTunerHelper.GfxConfig()) }
+    var gfxApplyResultMsg by remember { mutableStateOf<String?>(null) }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
     var manualPkg by remember { mutableStateOf("") }
@@ -739,6 +743,17 @@ fun GameListTab(viewModel: GameViewModel) {
                             contentPadding = cardBtnPadding
                         ) {
                             Text(stringResource(id = R.string.game_resolution_btn), style = cardBtnStyle)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                selectedGfxGame = game
+                                currentGfxConfig = viewModel.getGfxConfig(game.packageName)
+                                showGfxDialog = true
+                            },
+                            contentPadding = cardBtnPadding
+                        ) {
+                            Text(stringResource(id = R.string.gfx_tuner_btn), style = cardBtnStyle)
                         }
 
                         OutlinedButton(
@@ -1015,6 +1030,170 @@ fun GameListTab(viewModel: GameViewModel) {
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
                     Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showGfxDialog && selectedGfxGame != null) {
+        val game = selectedGfxGame!!
+        val engine = GfxTunerHelper.detectEngine(context, game.packageName)
+        val engineName = when (engine) {
+            GfxTunerHelper.EngineType.UNITY -> "Unity (Zooba, etc.)"
+            GfxTunerHelper.EngineType.GODOT -> "Godot Engine (override.cfg)"
+            GfxTunerHelper.EngineType.ITSMAGIC -> "ITsMagic Engine (engine_settings.json)"
+            GfxTunerHelper.EngineType.UNREAL -> "Unreal Engine"
+            GfxTunerHelper.EngineType.GENERIC -> "Genérico (Android Game Mode)"
+        }
+
+        AlertDialog(
+            onDismissRequest = { showGfxDialog = false },
+            title = {
+                Text("${stringResource(id = R.string.gfx_tuner_title)}: ${game.name}")
+            },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                    item {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.gfx_engine_note, engineName),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+
+                        // Modo Ultra Batata
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.extremePotatoMode,
+                                onCheckedChange = { isChecked ->
+                                    currentGfxConfig = if (isChecked) {
+                                        currentGfxConfig.copy(
+                                            extremePotatoMode = true,
+                                            disableShadows = true,
+                                            reducePolygons = true,
+                                            disableWaterEffects = true,
+                                            disableExplosions = true
+                                        )
+                                    } else {
+                                        currentGfxConfig.copy(extremePotatoMode = false)
+                                    }
+                                }
+                            )
+                            Text(
+                                text = stringResource(id = R.string.gfx_extreme_potato),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // Sombras e Iluminação
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.disableShadows,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(disableShadows = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_disable_shadows), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Polígonos e Malha
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.reducePolygons,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(reducePolygons = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_reduce_polygons), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Água e Reflexos
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.disableWaterEffects,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(disableWaterEffects = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_disable_water), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Explosões e Partículas
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.disableExplosions,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(disableExplosions = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_disable_explosions), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Silenciar Áudio
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.muteAudio,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(muteAudio = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_mute_audio), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.saveGfxConfig(game.packageName, currentGfxConfig)
+                                val res = viewModel.applyGfxProfile(game.packageName)
+                                gfxApplyResultMsg = res
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(id = R.string.gfx_apply_now))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.saveGfxConfig(game.packageName, currentGfxConfig)
+                    showGfxDialog = false
+                }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGfxDialog = false }) {
+                    Text(stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (gfxApplyResultMsg != null) {
+        AlertDialog(
+            onDismissRequest = { gfxApplyResultMsg = null },
+            title = { Text(stringResource(id = R.string.gfx_tuner_title)) },
+            text = { Text(gfxApplyResultMsg!!) },
+            confirmButton = {
+                TextButton(onClick = { gfxApplyResultMsg = null }) {
+                    Text(stringResource(id = R.string.ok))
                 }
             }
         )

@@ -551,6 +551,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             ShellHelper.executePrivileged("echo performance > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
         }
 
+        val gfxConfig = GfxTunerHelper.getGfxConfig(app, packageName)
+        GfxTunerHelper.applyGfxOptimizations(app, packageName, gfxConfig)
+
         val profile = _games.value.find { it.packageName == packageName }?.profile
         if (profile != null) {
             ShellHelper.executePrivileged("wm size ${profile.resolution}")
@@ -568,6 +571,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun getGfxConfig(packageName: String): GfxTunerHelper.GfxConfig {
+        return GfxTunerHelper.getGfxConfig(app, packageName)
+    }
+
+    fun saveGfxConfig(packageName: String, config: GfxTunerHelper.GfxConfig) {
+        GfxTunerHelper.saveGfxConfig(app, packageName, config)
+    }
+
+    fun applyGfxProfile(packageName: String): String {
+        val config = GfxTunerHelper.getGfxConfig(app, packageName)
+        return GfxTunerHelper.applyGfxOptimizations(app, packageName, config)
     }
 
     fun saveProfile(packageName: String, resolution: String, density: Int) {

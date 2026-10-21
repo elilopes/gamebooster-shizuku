@@ -23,6 +23,16 @@
     <string name="pak_bundle_compression_title">Compactação de .pak e .bundle</string>
     <string name="pak_bundle_safe_notice">Nenhum sistema de integridade formal detectado. É seguro compactar e otimizar arquivos .pak e .bundle deste jogo.</string>
     <string name="pak_bundle_blocked_notice">Sistema de integridade ativo detectado. A compactação é bloqueada para evitar rejeição de dados ou banimento.</string>
+    <string name="gfx_tuner_title">GFX Tuner / Modo Batata</string>
+    <string name="gfx_tuner_btn">GFX Tuner</string>
+    <string name="gfx_extreme_potato">Modo Ultra Batata (Todos Efeitos Mínimos)</string>
+    <string name="gfx_disable_shadows">Desativar Sombras e Iluminação</string>
+    <string name="gfx_reduce_polygons">Reduzir Polígonos e Malha (LOD)</string>
+    <string name="gfx_disable_water">Desativar Efeitos da Água e Reflexos</string>
+    <string name="gfx_disable_explosions">Reduzir Explosões e Partículas</string>
+    <string name="gfx_mute_audio">Silenciar Áudio e Sons do Jogo</string>
+    <string name="gfx_apply_now">Aplicar Ajustes GFX Agora</string>
+    <string name="gfx_engine_note">Motor: %s (Otimização para Unity/Zooba ou Unreal Engine)</string>
     <string name="scripts_tab_title">Scripts Shell Personalizados (.sh)</string>
     <string name="scripts_tab_desc">Execute scripts personalizados ou comandos estilo Game Tuner com privilégios Shizuku:</string>
     <string name="scripts_run_btn">Executar Script</string>

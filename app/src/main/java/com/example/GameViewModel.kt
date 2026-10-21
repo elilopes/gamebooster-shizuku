@@ -1,8 +1,11 @@
 package com.example
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -30,10 +33,20 @@ data class BackgroundApp(
     val memUsage: String
 )
 
+data class AppItemInfo(
+    val packageName: String,
+    val name: String,
+    val versionName: String,
+    val isGame: Boolean,
+    val isAlreadyAdded: Boolean
+)
+
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val packageManager = application.packageManager
     private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db").build()
+    private val boostPrefs = application.getSharedPreferences("boost_settings_prefs", Context.MODE_PRIVATE)
+    private val manualGamesPrefs = application.getSharedPreferences("manual_games_prefs", Context.MODE_PRIVATE)
     
     private val _games = MutableStateFlow<List<GameApp>>(emptyList())
     val games: StateFlow<List<GameApp>> = _games
@@ -70,9 +83,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val nativeResolution = ShellHelper.getNativeResolution()
 
     init {
+        loadBoostSettings()
         loadGames()
         scanBackgroundApps()
-        adBlockerEnabled.value = AdBlockHelper.isAdBlockingActive()
+    }
+
+    private fun loadBoostSettings() {
+        thermalBoost.value = boostPrefs.getBoolean("thermalBoost", false)
+        disableOverlays.value = boostPrefs.getBoolean("disableOverlays", false)
+        autoClearCache.value = boostPrefs.getBoolean("autoClearCache", false)
+        oomImmortal.value = boostPrefs.getBoolean("oomImmortal", false)
+        adBlockerEnabled.value = boostPrefs.getBoolean("adBlockerEnabled", AdBlockHelper.isAdBlockingActive())
+        adBlockerRealtime.value = boostPrefs.getBoolean("adBlockerRealtime", false)
+        disableAnimations.value = boostPrefs.getBoolean("disableAnimations", false)
+        highTouchSampling.value = boostPrefs.getBoolean("highTouchSampling", false)
+        limitBackgroundProcesses.value = boostPrefs.getBoolean("limitBackgroundProcesses", false)
+        blockAutoRestart.value = boostPrefs.getBoolean("blockAutoRestart", false)
+        forceDeepSleepCache.value = boostPrefs.getBoolean("forceDeepSleepCache", false)
+        forceMaxCpu.value = boostPrefs.getBoolean("forceMaxCpu", false)
+        forceMaxGpu.value = boostPrefs.getBoolean("forceMaxGpu", false)
     }
 
     fun toggleThermalMonitor(enabled: Boolean) {
@@ -89,9 +118,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAdBlockerRealtime(enabled: Boolean) {
         adBlockerRealtime.value = enabled
+        boostPrefs.edit().putBoolean("adBlockerRealtime", enabled).apply()
         GameForegroundService.adBlockerRealtimeActive = enabled
         if (enabled) {
             adBlockerEnabled.value = true
+            boostPrefs.edit().putBoolean("adBlockerEnabled", true).apply()
             AdBlockHelper.enableAdBlocking()
             GameForegroundService.startService(app)
         } else {
@@ -139,30 +170,141 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val systemExcludePackages = setOf(
+        "com.android.settings",
+        "com.android.stk",
+        "com.android.systemui",
+        "com.google.android.packageinstaller",
+        "com.android.packageinstaller",
+        "com.google.android.googlequicksearchbox",
+        app.packageName
+    )
+
+    fun isGameApp(appInfo: ApplicationInfo, pkgName: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (appInfo.category == ApplicationInfo.CATEGORY_GAME) return true
+        }
+        @Suppress("DEPRECATION")
+        if ((appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0) return true
+
+        if (GfxTunerHelper.detectEngine(app, pkgName) != GfxTunerHelper.EngineType.GENERIC) return true
+
+        val label = try { appInfo.loadLabel(packageManager).toString().lowercase() } catch (e: Exception) { "" }
+        val pkg = pkgName.lowercase()
+        val keywords = listOf(
+            "game", "jogo", "zooba", "wildlife", "battle", "craft", "rpg", "racing",
+            "runner", "simulator", "strike", "freefire", "pubg", "roblox", "brawl",
+            "clash", "codm", "arcade", "pokemon", "subway", "angry", "fifa", "pes",
+            "mobile", "genshin", "honkai", "garena", "tencent", "epicgames", "riotgames",
+            "supercell", "gameloft", "ea.", "king.", "rovio", "miniclip"
+        )
+        return keywords.any { pkg.contains(it) || label.contains(it) }
+    }
+
+    fun getInstalledApps(searchQuery: String = ""): List<AppItemInfo> {
+        val query = searchQuery.trim().lowercase()
+        val installed = try {
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+            val launcherApps = packageManager.queryIntentActivities(mainIntent, 0).map { it.activityInfo.packageName }.toSet()
+            val allApps = packageManager.getInstalledApplications(0)
+            
+            allApps.filter { appInfo ->
+                appInfo.packageName != app.packageName && (launcherApps.contains(appInfo.packageName) || (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0)
+            }.map { appInfo ->
+                val pkg = appInfo.packageName
+                val name = appInfo.loadLabel(packageManager).toString()
+                val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0" } catch (e: Exception) { "1.0" }
+                val isGame = isGameApp(appInfo, pkg)
+                val isAdded = _games.value.any { it.packageName == pkg }
+                AppItemInfo(pkg, name, vName, isGame, isAdded)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val filtered = if (query.isEmpty()) {
+            installed
+        } else {
+            installed.filter { it.name.lowercase().contains(query) || it.packageName.lowercase().contains(query) }
+        }
+
+        return filtered.sortedWith(
+            compareByDescending<AppItemInfo> { it.isGame }
+                .thenBy { it.name.lowercase() }
+        )
+    }
+
     fun loadGames() {
         viewModelScope.launch(Dispatchers.IO) {
             val profiles = db.gameProfileDao().getAllProfiles()
-            val mainIntent = Intent(Intent.ACTION_MAIN, null)
-            mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
-            val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
+            val manualSet = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet()) ?: emptySet()
             
-            val detectedGames = resolveInfos.map { resolveInfo ->
-                val packageName = resolveInfo.activityInfo.packageName
-                val name = resolveInfo.loadLabel(packageManager).toString()
-                val profile = profiles.find { it.packageName == packageName }
-                val versionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
-                } catch (e: Exception) {
-                    "1.0.0"
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+            val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
+            val allApps = try { packageManager.getInstalledApplications(0) } catch (e: Exception) { emptyList() }
+            val appInfoMap = allApps.associateBy { it.packageName }
+
+            val list = mutableListOf<GameApp>()
+
+            for (resolveInfo in resolveInfos) {
+                val pkg = resolveInfo.activityInfo.packageName
+                if (pkg == app.packageName) continue
+
+                val appInfo = appInfoMap[pkg] ?: resolveInfo.activityInfo.applicationInfo
+                val isManual = manualSet.contains(pkg)
+                val hasProfile = profiles.any { it.packageName == pkg }
+                val isGame = isGameApp(appInfo, pkg)
+
+                if (systemExcludePackages.contains(pkg) && !isManual && !hasProfile) continue
+
+                if (isGame || isManual || hasProfile) {
+                    val name = resolveInfo.loadLabel(packageManager).toString()
+                    val profile = profiles.find { it.packageName == pkg }
+                    val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
+                    list.add(GameApp(pkg, name, profile, vName))
                 }
-                GameApp(packageName, name, profile, versionName)
             }
-            _games.value = detectedGames
+
+            // Se nenhum jogo categorizado for encontrado ainda, inclui os apps de usuário normais (não de sistema)
+            if (list.isEmpty()) {
+                for (appInfo in allApps) {
+                    val pkg = appInfo.packageName
+                    if (pkg == app.packageName || systemExcludePackages.contains(pkg)) continue
+                    val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                    if (isUserApp) {
+                        val name = appInfo.loadLabel(packageManager).toString()
+                        val profile = profiles.find { it.packageName == pkg }
+                        val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
+                        list.add(GameApp(pkg, name, profile, vName))
+                    }
+                }
+            }
+
+            // Garantir que todos os jogos manuais salvos estejam na lista
+            for (pkg in manualSet) {
+                if (list.none { it.packageName == pkg }) {
+                    try {
+                        val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                        val name = appInfo.loadLabel(packageManager).toString()
+                        val profile = profiles.find { it.packageName == pkg }
+                        val vName = packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0"
+                        list.add(GameApp(pkg, name, profile, vName))
+                    } catch (e: Exception) {
+                        // app não encontrado
+                    }
+                }
+            }
+
+            _games.value = list.distinctBy { it.packageName }
         }
     }
 
     fun addManualGame(packageName: String, name: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            val savedManuals = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet())?.toMutableSet() ?: mutableSetOf()
+            savedManuals.add(packageName)
+            manualGamesPrefs.edit().putStringSet("saved_manual_packages", savedManuals).apply()
+
             val profile = db.gameProfileDao().getProfile(packageName)
             val versionName = try {
                 packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
@@ -172,6 +314,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val newGame = GameApp(packageName, name, profile, versionName)
             if (_games.value.none { it.packageName == packageName }) {
                 _games.value = _games.value + newGame
+            }
+        }
+    }
+
+    fun removeGame(packageName: String) {
+        val savedManuals = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (savedManuals.contains(packageName)) {
+            savedManuals.remove(packageName)
+            manualGamesPrefs.edit().putStringSet("saved_manual_packages", savedManuals).apply()
+        }
+        _games.value = _games.value.filter { it.packageName != packageName }
+    }
+
+    fun autoScanAndAddGames(onResult: ((Int) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            loadGames()
+            delay(300)
+            val count = _games.value.size
+            if (onResult != null) {
+                withContext(Dispatchers.Main) {
+                    onResult(count)
+                }
             }
         }
     }
@@ -304,11 +468,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun autoScanAndAddGames() {
-        viewModelScope.launch(Dispatchers.IO) {
-            loadGames()
-        }
-    }
 
     fun scanBackgroundApps() {
         viewModelScope.launch {
@@ -362,6 +521,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAdBlocker(enable: Boolean) {
         adBlockerEnabled.value = enable
+        boostPrefs.edit().putBoolean("adBlockerEnabled", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             if (enable) {
                 AdBlockHelper.enableAdBlocking()
@@ -419,8 +579,46 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleThermalBoost(enable: Boolean) {
+        thermalBoost.value = enable
+        boostPrefs.edit().putBoolean("thermalBoost", enable).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            if (enable) {
+                ShellHelper.executePrivileged("setprop debug.thermal.throttle.support 0")
+                ShellHelper.executePrivileged("cmd thermalservice override-status 0")
+                ShellHelper.executePrivileged("stop thermal-engine")
+                ShellHelper.executePrivileged("stop thermald")
+            } else {
+                ShellHelper.executePrivileged("setprop debug.thermal.throttle.support 1")
+                ShellHelper.executePrivileged("cmd thermalservice reset")
+                ShellHelper.executePrivileged("start thermal-engine")
+                ShellHelper.executePrivileged("start thermald")
+            }
+        }
+    }
+
+    fun toggleDisableOverlays(enable: Boolean) {
+        disableOverlays.value = enable
+        boostPrefs.edit().putBoolean("disableOverlays", enable).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            val code = if (enable) 1 else 0
+            ShellHelper.executePrivileged("service call SurfaceFlinger 1008 i32 $code")
+        }
+    }
+
+    fun toggleAutoClearCache(enable: Boolean) {
+        autoClearCache.value = enable
+        boostPrefs.edit().putBoolean("autoClearCache", enable).apply()
+    }
+
+    fun toggleOomImmortal(enable: Boolean) {
+        oomImmortal.value = enable
+        boostPrefs.edit().putBoolean("oomImmortal", enable).apply()
+    }
+
     fun toggleDisableAnimations(enable: Boolean) {
         disableAnimations.value = enable
+        boostPrefs.edit().putBoolean("disableAnimations", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val scale = if (enable) "0.0" else "1.0"
             ShellHelper.executePrivileged("settings put global window_animation_scale $scale")
@@ -431,6 +629,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleHighTouchSampling(enable: Boolean) {
         highTouchSampling.value = enable
+        boostPrefs.edit().putBoolean("highTouchSampling", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val v = if (enable) "1" else "0"
             ShellHelper.executePrivileged("settings put system touch_response_rate $v")
@@ -442,6 +641,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleLimitBackgroundProcesses(enable: Boolean) {
         limitBackgroundProcesses.value = enable
+        boostPrefs.edit().putBoolean("limitBackgroundProcesses", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             if (enable) {
                 ShellHelper.executePrivileged("settings put global standard_background_process_limit 0")
@@ -454,6 +654,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleBlockAutoRestart(enable: Boolean) {
         blockAutoRestart.value = enable
+        boostPrefs.edit().putBoolean("blockAutoRestart", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val op = if (enable) "ignore" else "allow"
             backgroundApps.value.forEach { app ->
@@ -470,6 +671,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleForceDeepSleepCache(enable: Boolean) {
         forceDeepSleepCache.value = enable
+        boostPrefs.edit().putBoolean("forceDeepSleepCache", enable).apply()
         if (enable) {
             executeDeepSleepNow { _, _ -> }
         }
@@ -497,6 +699,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleForceMaxCpu(enable: Boolean) {
         forceMaxCpu.value = enable
+        boostPrefs.edit().putBoolean("forceMaxCpu", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val gov = if (enable) "performance" else "schedutil"
             ShellHelper.executePrivileged("echo $gov > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
@@ -505,6 +708,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleForceMaxGpu(enable: Boolean) {
         forceMaxGpu.value = enable
+        boostPrefs.edit().putBoolean("forceMaxGpu", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val gov = if (enable) "performance" else "msm-adreno-tz"
             ShellHelper.executePrivileged("echo $gov > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
@@ -593,9 +797,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun removeGame(packageName: String) {
-        _games.value = _games.value.filter { it.packageName != packageName }
-    }
 
     fun releaseMemory() {
         viewModelScope.launch(Dispatchers.IO) {

@@ -19,20 +19,35 @@ object ShellHelper {
     }
 
     fun executePrivileged(command: String): String {
-        // Fallback for demonstration: in a production Shizuku app, 
-        // you would use Shizuku's specific binder interface.
-        return execute(command)
+        return if (ShizukuHelper.hasPermission()) {
+            ShizukuHelper.executeCommand(command).trim()
+        } else if (ShizukuHelper.isRootAvailable()) {
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                process.waitFor()
+                output.trim()
+            } catch (e: Exception) {
+                execute(command)
+            }
+        } else {
+            execute(command)
+        }
     }
 
     fun getNativeResolution(): String {
-        val output = execute("wm size")
-        return output.substringAfter("Physical size: ").ifEmpty { 
-            execute("wm size").substringAfter("Override size: ").ifEmpty { "Unknown" } 
+        var output = execute("wm size")
+        if (output.isEmpty() || !output.contains("size")) {
+            output = executePrivileged("wm size")
         }
+        return output.substringAfter("Physical size: ").ifEmpty { 
+            output.substringAfter("Override size: ").ifEmpty { "1080x1920" } 
+        }.trim()
     }
     
     fun clearCache(packageName: String) {
         executePrivileged("rm -rf /data/data/$packageName/cache/*")
+        executePrivileged("pm trim-caches 999G")
     }
 
     fun setOomImmortal(packageName: String) {
@@ -40,8 +55,10 @@ object ShellHelper {
     }
 
     fun getTemperature(): Float {
-        // Simple fallback/demonstration reading
-        val output = execute("cat /sys/class/thermal/thermal_zone0/temp")
+        var output = execute("cat /sys/class/thermal/thermal_zone0/temp")
+        if (output.isEmpty()) {
+            output = executePrivileged("cat /sys/class/thermal/thermal_zone0/temp")
+        }
         val temp = output.toFloatOrNull() ?: 0f
         return if (temp > 1000) temp / 1000f else temp
     }

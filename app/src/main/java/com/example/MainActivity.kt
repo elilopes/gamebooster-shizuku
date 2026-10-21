@@ -12,8 +12,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
@@ -516,6 +520,39 @@ fun ThermalMonitorTab(viewModel: GameViewModel) {
 }
 
 @Composable
+fun AppIconImage(packageName: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val bitmap = remember(packageName) {
+        try {
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+            val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bmp)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bmp.asImageBitmap()
+        } catch (e: Exception) {
+            null
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            modifier = modifier
+        )
+    } else {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            modifier = modifier,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
 fun GameListTab(viewModel: GameViewModel) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -534,8 +571,6 @@ fun GameListTab(viewModel: GameViewModel) {
     var gfxApplyResultMsg by remember { mutableStateOf<String?>(null) }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
-    var manualPkg by remember { mutableStateOf("") }
-    var manualName by remember { mutableStateOf("") }
 
     var customResolutionInput by remember { mutableStateOf("1280x720") }
     var customDensityInput by remember { mutableStateOf("320") }
@@ -624,7 +659,12 @@ fun GameListTab(viewModel: GameViewModel) {
                             Text(stringResource(id = R.string.game_add_manually), style = MaterialTheme.typography.labelSmall)
                         }
                         Button(
-                            onClick = { viewModel.autoScanAndAddGames() },
+                            onClick = {
+                                viewModel.autoScanAndAddGames { count ->
+                                    val msg = context.getString(R.string.auto_scan_result, count)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) {
@@ -800,39 +840,158 @@ fun GameListTab(viewModel: GameViewModel) {
     }
 
     if (showManualAddDialog) {
+        var appSearchQuery by remember { mutableStateOf("") }
+        val installedApps = remember(appSearchQuery, showManualAddDialog) {
+            viewModel.getInstalledApps(appSearchQuery)
+        }
+
         AlertDialog(
             onDismissRequest = { showManualAddDialog = false },
-            title = { Text(stringResource(id = R.string.game_add_manual_title)) },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.select_app_title),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    IconButton(onClick = { showManualAddDialog = false }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+            },
             text = {
-                Column {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp)) {
                     OutlinedTextField(
-                        value = manualName,
-                        onValueChange = { manualName = it },
-                        label = { Text(stringResource(id = R.string.game_app_name_label)) },
-                        modifier = Modifier.fillMaxWidth()
+                        value = appSearchQuery,
+                        onValueChange = { appSearchQuery = it },
+                        placeholder = { Text(stringResource(id = R.string.search_app_placeholder)) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                        trailingIcon = {
+                            if (appSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { appSearchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = manualPkg,
-                        onValueChange = { manualPkg = it },
-                        label = { Text(stringResource(id = R.string.game_pkg_name_label)) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
+                    if (installedApps.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.no_apps_found),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                            items(installedApps, key = { it.packageName }) { appItem ->
+                                val isAlreadyAdded = games.any { it.packageName == appItem.packageName }
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable {
+                                            if (!isAlreadyAdded) {
+                                                viewModel.addManualGame(appItem.packageName, appItem.name)
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.app_added_success, appItem.name),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                showManualAddDialog = false
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.app_already_added, appItem.name),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isAlreadyAdded)
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AppIconImage(
+                                            packageName = appItem.packageName,
+                                            modifier = Modifier.size(42.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = appItem.name,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    maxLines = 1
+                                                )
+                                                if (appItem.isGame) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Surface(
+                                                        shape = MaterialTheme.shapes.extraSmall,
+                                                        color = MaterialTheme.colorScheme.primaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = "Game",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = appItem.packageName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        if (isAlreadyAdded) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Added",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        } else {
+                                            Button(
+                                                onClick = {
+                                                    viewModel.addManualGame(appItem.packageName, appItem.name)
+                                                    Toast.makeText(
+                                                        context,
+                                                        context.getString(R.string.app_added_success, appItem.name),
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                    showManualAddDialog = false
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("+", style = MaterialTheme.typography.labelLarge)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (manualPkg.isNotBlank() && manualName.isNotBlank()) {
-                        viewModel.addManualGame(manualPkg.trim(), manualName.trim())
-                        manualPkg = ""
-                        manualName = ""
-                        showManualAddDialog = false
-                    }
-                }) {
-                    Text(stringResource(id = R.string.ok))
-                }
-            },
-            dismissButton = {
                 TextButton(onClick = { showManualAddDialog = false }) {
                     Text(stringResource(id = R.string.cancel))
                 }
@@ -1570,7 +1729,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     var vmResultMsg by remember { mutableStateOf<String?>(null) }
     var deepSleepResultMsg by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
@@ -1668,7 +1827,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
         SettingItem(
             title = stringResource(id = R.string.boost_thermal_title),
             checked = thermalBoost,
-            onCheckedChange = { viewModel.thermalBoost.value = it },
+            onCheckedChange = { viewModel.toggleThermalBoost(it) },
             titleRes = R.string.boost_thermal_title,
             descRes = R.string.boost_thermal_desc,
             onInfoClick = { showInfoDialog = it }
@@ -1676,7 +1835,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
         SettingItem(
             title = stringResource(id = R.string.boost_overlay_title),
             checked = disableOverlays,
-            onCheckedChange = { viewModel.disableOverlays.value = it },
+            onCheckedChange = { viewModel.toggleDisableOverlays(it) },
             titleRes = R.string.boost_overlay_title,
             descRes = R.string.boost_overlay_desc,
             onInfoClick = { showInfoDialog = it }
@@ -1684,7 +1843,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
         SettingItem(
             title = stringResource(id = R.string.boost_cache_title),
             checked = autoClearCache,
-            onCheckedChange = { viewModel.autoClearCache.value = it },
+            onCheckedChange = { viewModel.toggleAutoClearCache(it) },
             titleRes = R.string.boost_cache_title,
             descRes = R.string.boost_cache_desc,
             onInfoClick = { showInfoDialog = it }
@@ -1692,7 +1851,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
         SettingItem(
             title = stringResource(id = R.string.boost_oom_title),
             checked = oomImmortal,
-            onCheckedChange = { viewModel.oomImmortal.value = it },
+            onCheckedChange = { viewModel.toggleOomImmortal(it) },
             titleRes = R.string.boost_oom_title,
             descRes = R.string.boost_oom_desc,
             onInfoClick = { showInfoDialog = it }
@@ -1772,6 +1931,7 @@ fun SettingItem(
     descRes: Int,
     onInfoClick: (Pair<String, String>) -> Unit
 ) {
+    val context = LocalContext.current
     val t = stringResource(id = titleRes)
     val d = stringResource(id = descRes)
     ListItem(
@@ -1785,10 +1945,10 @@ fun SettingItem(
             Switch(
                 checked = checked,
                 onCheckedChange = { newValue ->
-                    if (newValue && !ShizukuHelper.hasPermission()) {
+                    onCheckedChange(newValue)
+                    if (newValue && !ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
                         ShizukuHelper.requestPermission()
-                    } else {
-                        onCheckedChange(newValue)
+                        Toast.makeText(context, context.getString(R.string.shizuku_optional_tip), Toast.LENGTH_SHORT).show()
                     }
                 }
             )

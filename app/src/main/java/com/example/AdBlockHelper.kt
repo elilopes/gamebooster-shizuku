@@ -72,14 +72,14 @@ object AdBlockHelper {
     fun enableAdBlocking(): Boolean {
         return try {
             if (originalDnsMode == null) {
-                val currentMode = ShellHelper.execute("settings get global private_dns_mode").trim()
+                val currentMode = ShellHelper.executePrivileged("settings get global private_dns_mode").trim()
                 originalDnsMode = if (currentMode.isNotEmpty() && currentMode != "null") currentMode else "opportunistic"
-                val currentSpec = ShellHelper.execute("settings get global private_dns_specifier").trim()
+                val currentSpec = ShellHelper.executePrivileged("settings get global private_dns_specifier").trim()
                 originalDnsSpecifier = if (currentSpec.isNotEmpty() && currentSpec != "null") currentSpec else ""
             }
 
-            ShellHelper.execute("settings put global private_dns_mode hostname")
-            ShellHelper.execute("settings put global private_dns_specifier $ADGUARD_DNS")
+            ShellHelper.executePrivileged("settings put global private_dns_mode hostname")
+            ShellHelper.executePrivileged("settings put global private_dns_specifier $ADGUARD_DNS")
             true
         } catch (e: Exception) {
             false
@@ -91,11 +91,11 @@ object AdBlockHelper {
             val restoreMode = originalDnsMode ?: "opportunistic"
             val restoreSpec = originalDnsSpecifier ?: ""
 
-            ShellHelper.execute("settings put global private_dns_mode $restoreMode")
+            ShellHelper.executePrivileged("settings put global private_dns_mode $restoreMode")
             if (restoreSpec.isNotEmpty()) {
-                ShellHelper.execute("settings put global private_dns_specifier $restoreSpec")
+                ShellHelper.executePrivileged("settings put global private_dns_specifier $restoreSpec")
             } else {
-                ShellHelper.execute("settings delete global private_dns_specifier")
+                ShellHelper.executePrivileged("settings delete global private_dns_specifier")
             }
             true
         } catch (e: Exception) {
@@ -104,8 +104,8 @@ object AdBlockHelper {
     }
 
     fun isAdBlockingActive(): Boolean {
-        val currentSpec = ShellHelper.execute("settings get global private_dns_specifier").trim()
-        val currentMode = ShellHelper.execute("settings get global private_dns_mode").trim()
+        val currentSpec = ShellHelper.executePrivileged("settings get global private_dns_specifier").trim()
+        val currentMode = ShellHelper.executePrivileged("settings get global private_dns_mode").trim()
         return currentMode == "hostname" && currentSpec.contains("adguard", ignoreCase = true)
     }
 }

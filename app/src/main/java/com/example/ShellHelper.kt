@@ -5,6 +5,7 @@ import java.io.InputStreamReader
 
 object ShellHelper {
 
+// Apenas para comandos que NÃO exigem privilégios de sistema
     fun execute(command: String): String {
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
@@ -18,18 +19,36 @@ object ShellHelper {
         }
     }
 
+    /**
+     * Executa comandos privilegiados (como am force-stop, wm size, etc.)
+     * REGRA: Exige obrigatoriamente Shizuku ativo. NUNCA cai para o shell comum do app.
+     */
     fun executePrivileged(command: String): String {
-        return if (ShizukuHelper.hasPermission()) {
-            val out = ShizukuHelper.executeCommand(command).trim()
-            if ((out.startsWith("Error:") || out.contains("Permission denied", ignoreCase = true)) && ShizukuHelper.isRootAvailable()) {
+        return try {
+            // 1. Verifica rigorosamente se o Shizuku está rodando e tem permissão
+            if (ShizukuHelper.hasPermission()) {
+                val out = ShizukuHelper.executeCommand(command).trim()
+                if (out.startsWith("Error", ignoreCase = true) || out.contains("Permission denied", ignoreCase = true)) {
+                    // Se o Shizuku falhou mas há Root disponível, usa root como alternativa avançada
+                    if (ShizukuHelper.isRootAvailable()) {
+                        executeRoot(command)
+                    } else {
+                        "Error: Shizuku falhou ao executar o comando."
+                    }
+                } else {
+                    out
+                }
+            } 
+            // 2. Se o Shizuku não estiver ativo, mas o aparelho tiver Root, permite o root
+            else if (ShizukuHelper.isRootAvailable()) {
                 executeRoot(command)
-            } else {
-                out
+            } 
+            // 3. SE NENHUM DOS DOIS ESTIVER ATIVO: Bloqueia e impede o shell comum!
+            else {
+                "Error: Shizuku desativado. É necessário ativar o Shizuku para forçar a parada de aplicativos."
             }
-        } else if (ShizukuHelper.isRootAvailable()) {
-            executeRoot(command)
-        } else {
-            execute(command)
+        } catch (e: Exception) {
+            "Error: ${e.message}"
         }
     }
 
@@ -41,7 +60,7 @@ object ShellHelper {
             process.waitFor()
             if (output.isNotEmpty()) output.trim() else err.trim()
         } catch (e: Exception) {
-            execute(command)
+            "Error: Root execution failed."
         }
     }
 

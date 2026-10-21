@@ -172,6 +172,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun releaseMemory() {
+        try {
+            val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val runningAppProcesses = am.runningAppProcesses
+            if (runningAppProcesses != null) {
+                for (proc in runningAppProcesses) {
+                    if (proc.importance > ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE) {
+                        am.killBackgroundProcesses(proc.processName)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private val systemExcludePackages = setOf(
         "com.android.settings",
         "com.android.stk",
@@ -566,7 +582,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             // Executar comandos de encerramento forçado reais
             ShellHelper.executePrivileged("am force-stop $packageName")
             ShellHelper.executePrivileged("pkill -9 -f $packageName")
-            ShellHelper.executePrivileged("killall -9 $packageName")
 
             try {
                 val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -611,7 +626,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             scanBackgroundApps()
 
             withContext(Dispatchers.Main) {
-                val msg = "Todos os $killedCount aplicativos em segundo plano foram forçados a parar com sucesso!"
+                val msg = "Todos os $killedCount aplicativos que estão em segundo plano foram forçados a parar!"
                 onResult?.invoke(killedCount, msg)
             }
         }
@@ -819,97 +834,257 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleDisableOverlays(enable: Boolean) {
+    // Função auxiliar para validar privilégios e verificar o shizuku antes de qualquer otimização da aba
+    private fun checkPrivilegeOrNotify(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        if (ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()) {
+            onSuccess()
+        } else {
+            onError("É necessário ativar o Shizuku para usar esta otimização.")
+        }
+    }
+
+    fun toggleDisableOverlays(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            disableOverlays.value = false
+            boostPrefs.edit().putBoolean("disableOverlays", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         disableOverlays.value = enable
         boostPrefs.edit().putBoolean("disableOverlays", enable).apply()
+
         viewModelScope.launch(Dispatchers.IO) {
             val code = if (enable) 1 else 0
-            ShellHelper.executePrivileged("service call SurfaceFlinger 1008 i32 $code")
+            val result = ShellHelper.executePrivileged("service call SurfaceFlinger 1008 i32 $code")
+
+            withContext(Dispatchers.Main) {
+                if (result.startsWith("Error")) {
+                    disableOverlays.value = false
+                    boostPrefs.edit().putBoolean("disableOverlays", false).apply()
+                    onResult?.invoke(false, result)
+                } else {
+                    onResult?.invoke(true, if (enable) "Overlays desativados!" else "Overlays restaurados.")
+                }
+            }
         }
     }
 
-    fun toggleAutoClearCache(enable: Boolean) {
+    fun toggleAutoClearCache(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            autoClearCache.value = false
+            boostPrefs.edit().putBoolean("autoClearCache", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         autoClearCache.value = enable
         boostPrefs.edit().putBoolean("autoClearCache", enable).apply()
+        onResult?.invoke(true, if (enable) "Limpeza automática de cache ativada." else "Limpeza automática desativada.")
     }
 
-    fun toggleOomImmortal(enable: Boolean) {
+    fun toggleOomImmortal(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            oomImmortal.value = false
+            boostPrefs.edit().putBoolean("oomImmortal", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         oomImmortal.value = enable
         boostPrefs.edit().putBoolean("oomImmortal", enable).apply()
+        onResult?.invoke(true, if (enable) "Modo OOM Immortal ativado." else "Modo OOM Immortal desativado.")
     }
 
-    fun toggleDisableAnimations(enable: Boolean) {
+    fun toggleDisableAnimations(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            disableAnimations.value = false
+            boostPrefs.edit().putBoolean("disableAnimations", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         disableAnimations.value = enable
         boostPrefs.edit().putBoolean("disableAnimations", enable).apply()
+
         viewModelScope.launch(Dispatchers.IO) {
             val scale = if (enable) "0.0" else "1.0"
-            ShellHelper.executePrivileged("settings put global window_animation_scale $scale")
-            ShellHelper.executePrivileged("settings put global transition_animation_scale $scale")
-            ShellHelper.executePrivileged("settings put global animator_duration_scale $scale")
+            val r1 = ShellHelper.executePrivileged("settings put global window_animation_scale $scale")
+            val r2 = ShellHelper.executePrivileged("settings put global transition_animation_scale $scale")
+            val r3 = ShellHelper.executePrivileged("settings put global animator_duration_scale $scale")
+
+            val hasError = r1.startsWith("Error") || r2.startsWith("Error") || r3.startsWith("Error")
+
+            withContext(Dispatchers.Main) {
+                if (hasError) {
+                    disableAnimations.value = false
+                    boostPrefs.edit().putBoolean("disableAnimations", false).apply()
+                    onResult?.invoke(false, "Erro ao configurar animações via Shizuku.")
+                } else {
+                    onResult?.invoke(true, if (enable) "Animações desativadas!" else "Animações restauradas.")
+                }
+            }
         }
     }
 
-    fun toggleHighTouchSampling(enable: Boolean) {
+    fun toggleHighTouchSampling(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            highTouchSampling.value = false
+            boostPrefs.edit().putBoolean("highTouchSampling", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         highTouchSampling.value = enable
         boostPrefs.edit().putBoolean("highTouchSampling", enable).apply()
+
         viewModelScope.launch(Dispatchers.IO) {
             val v = if (enable) "1" else "0"
-            ShellHelper.executePrivileged("settings put system touch_response_rate $v")
-            ShellHelper.executePrivileged("settings put system gaming_touch_mode $v")
-            ShellHelper.executePrivileged("settings put system touch_sensitivity $v")
-            ShellHelper.executePrivileged("settings put global game_touch_enhancement $v")
+            val r1 = ShellHelper.executePrivileged("settings put system touch_response_rate $v")
+            val r2 = ShellHelper.executePrivileged("settings put system gaming_touch_mode $v")
+            val r3 = ShellHelper.executePrivileged("settings put system touch_sensitivity $v")
+            val r4 = ShellHelper.executePrivileged("settings put global game_touch_enhancement $v")
+
+            val hasError = r1.startsWith("Error") || r2.startsWith("Error") || r3.startsWith("Error") || r4.startsWith("Error")
+
+            withContext(Dispatchers.Main) {
+                if (hasError) {
+                    highTouchSampling.value = false
+                    boostPrefs.edit().putBoolean("highTouchSampling", false).apply()
+                    onResult?.invoke(false, "Erro ao configurar taxa de amostragem de toque via Shizuku.")
+                } else {
+                    onResult?.invoke(true, if (enable) "Taxa de amostragem de toque aprimorada!" else "Taxa de toque restaurada.")
+                }
+            }
         }
     }
 
-    fun toggleLimitBackgroundProcesses(enable: Boolean) {
+    fun toggleLimitBackgroundProcesses(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            limitBackgroundProcesses.value = false
+            boostPrefs.edit().putBoolean("limitBackgroundProcesses", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         limitBackgroundProcesses.value = enable
         boostPrefs.edit().putBoolean("limitBackgroundProcesses", enable).apply()
+
         viewModelScope.launch(Dispatchers.IO) {
+            val r1: String
+            val r2: String
             if (enable) {
-                ShellHelper.executePrivileged("settings put global standard_background_process_limit 0")
-                ShellHelper.executePrivileged("am kill-all")
+                r1 = ShellHelper.executePrivileged("settings put global standard_background_process_limit 0")
+                r2 = ShellHelper.executePrivileged("am kill-all")
             } else {
-                ShellHelper.executePrivileged("settings put global standard_background_process_limit -1")
+                r1 = ShellHelper.executePrivileged("settings put global standard_background_process_limit -1")
+                r2 = ""
+            }
+
+            val hasError = r1.startsWith("Error") || r2.startsWith("Error")
+
+            withContext(Dispatchers.Main) {
+                if (hasError) {
+                    limitBackgroundProcesses.value = false
+                    boostPrefs.edit().putBoolean("limitBackgroundProcesses", false).apply()
+                    onResult?.invoke(false, "Erro ao configurar limite de processos via Shizuku.")
+                } else {
+                    onResult?.invoke(true, if (enable) "Limite de processos em segundo plano aplicado!" else "Limite de processos restaurado.")
+                }
             }
         }
     }
 
-    fun toggleBlockAutoRestart(enable: Boolean) {
+    fun toggleBlockAutoRestart(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            blockAutoRestart.value = false
+            boostPrefs.edit().putBoolean("blockAutoRestart", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         blockAutoRestart.value = enable
         boostPrefs.edit().putBoolean("blockAutoRestart", enable).apply()
+
         viewModelScope.launch(Dispatchers.IO) {
             val op = if (enable) "ignore" else "allow"
+            var hasError = false
+
             backgroundApps.value.forEach { app ->
-                ShellHelper.executePrivileged("cmd appops set ${app.packageName} RUN_IN_BACKGROUND $op")
-                ShellHelper.executePrivileged("cmd appops set ${app.packageName} RUN_ANY_IN_BACKGROUND $op")
+                val res1 = ShellHelper.executePrivileged("cmd appops set ${app.packageName} RUN_IN_BACKGROUND $op")
+                val res2 = ShellHelper.executePrivileged("cmd appops set ${app.packageName} RUN_ANY_IN_BACKGROUND $op")
+                if (res1.startsWith("Error") || res2.startsWith("Error")) {
+                    hasError = true
+                }
             }
-            if (enable) {
+
+            val syncRes = if (enable) {
                 ShellHelper.executePrivileged("settings put global auto_sync 0")
             } else {
                 ShellHelper.executePrivileged("settings put global auto_sync 1")
             }
+
+            if (syncRes.startsWith("Error")) hasError = true
+
+            withContext(Dispatchers.Main) {
+                if (hasError) {
+                    blockAutoRestart.value = false
+                    boostPrefs.edit().putBoolean("blockAutoRestart", false).apply()
+                    onResult?.invoke(false, "Erro ao configurar bloqueio de reinício automático.")
+                } else {
+                    onResult?.invoke(true, if (enable) "Bloqueio de reinício automático ativado!" else "Reinício automático liberado.")
+                }
+            }
         }
     }
 
-    fun toggleForceDeepSleepCache(enable: Boolean) {
+    fun toggleForceDeepSleepCache(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            forceDeepSleepCache.value = false
+            boostPrefs.edit().putBoolean("forceDeepSleepCache", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         forceDeepSleepCache.value = enable
-        boostPrefs.edit().putBoolean("forceDeepSleepCache", enable).apply()
+        boostPrefs.edit().putBoolean("forceDeepSleepCache", false).apply()
+
         if (enable) {
-            executeDeepSleepNow { _, _ -> }
+            executeDeepSleepNow { success, msg ->
+                onResult?.invoke(success, msg)
+            }
+        } else {
+            onResult?.invoke(true, "Modo Deep Sleep desativado.")
         }
     }
 
     fun executeDeepSleepNow(onResult: (Boolean, String) -> Unit) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            onResult(false, "Shizuku não está ativo! É necessário ativá-lo para aplicar o Deep Sleep.")
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                ShellHelper.executePrivileged("cmd deviceidle force-idle")
-                ShellHelper.executePrivileged("cmd activity freeze")
+                val r1 = ShellHelper.executePrivileged("cmd deviceidle force-idle")
+                val r2 = ShellHelper.executePrivileged("cmd activity freeze")
+                
+                var hasError = r1.startsWith("Error") || r2.startsWith("Error")
+
                 backgroundApps.value.forEach { app ->
-                    ShellHelper.executePrivileged("am set-standby-bucket ${app.packageName} restricted")
-                    ShellHelper.executePrivileged("am set-inactive ${app.packageName} true")
+                    val sa1 = ShellHelper.executePrivileged("am set-standby-bucket ${app.packageName} restricted")
+                    val sa2 = ShellHelper.executePrivileged("am set-inactive ${app.packageName} true")
+                    if (sa1.startsWith("Error") || sa2.startsWith("Error")) {
+                        hasError = true
+                    }
                 }
+
                 withContext(Dispatchers.Main) {
-                    onResult(true, "Deep sleep aplicado aos apps em cache com sucesso.")
+                    if (hasError) {
+                        onResult(false, "Alguns comandos de Deep Sleep falharam. Verifique o Shizuku.")
+                    } else {
+                        onResult(true, "Deep sleep aplicado aos apps em cache com sucesso.")
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -919,21 +1094,56 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleForceMaxCpu(enable: Boolean) {
+    fun toggleForceMaxCpu(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            forceMaxCpu.value = false
+            boostPrefs.edit().putBoolean("forceMaxCpu", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         forceMaxCpu.value = enable
         boostPrefs.edit().putBoolean("forceMaxCpu", enable).apply()
         viewModelScope.launch(Dispatchers.IO) {
             val gov = if (enable) "performance" else "schedutil"
-            ShellHelper.executePrivileged("echo $gov > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
+            val result = ShellHelper.executePrivileged("echo $gov > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
+            
+            withContext(Dispatchers.Main) {
+                if (result.startsWith("Error")) {
+                    forceMaxCpu.value = false
+                    boostPrefs.edit().putBoolean("forceMaxCpu", false).apply()
+                    onResult?.invoke(false, result)
+                } else {
+                    onResult?.invoke(true, if (enable) "CPU configurada para Performance!" else "CPU restaurada.")
+                }
+            }
         }
     }
 
-    fun toggleForceMaxGpu(enable: Boolean) {
+    fun toggleForceMaxGpu(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            forceMaxGpu.value = false
+            boostPrefs.edit().putBoolean("forceMaxGpu", false).apply()
+            onResult?.invoke(false, "Shizuku não está ativo! Ative-o para habilitar esta função.")
+            return
+        }
+
         forceMaxGpu.value = enable
         boostPrefs.edit().putBoolean("forceMaxGpu", enable).apply()
+        
         viewModelScope.launch(Dispatchers.IO) {
             val gov = if (enable) "performance" else "msm-adreno-tz"
-            ShellHelper.executePrivileged("echo $gov > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
+            val result = ShellHelper.executePrivileged("echo $gov > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
+
+            withContext(Dispatchers.Main) {
+                if (result.startsWith("Error")) {
+                    forceMaxGpu.value = false
+                    boostPrefs.edit().putBoolean("forceMaxGpu", false).apply()
+                    onResult?.invoke(false, result)
+                } else {
+                    onResult?.invoke(true, if (enable) "GPU configurada para Performance!" else "GPU restaurada.")
+                }
+            }
         }
     }
 
@@ -1020,13 +1230,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    fun releaseMemory() {
-        viewModelScope.launch(Dispatchers.IO) {
-            backgroundApps.value.forEach { app ->
-                killApp(app.packageName)
-            }
-        }
-    }
 
     fun getNativeDensity(): Int {
         val out = ShellHelper.execute("wm density").trim()
@@ -1053,7 +1256,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun runCustomScript(scriptContent: String, onResult: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Save script to cache file and execute with sh
                 val scriptFile = File(app.cacheDir, "custom_boost_script.sh")
                 scriptFile.writeText(scriptContent)
                 val output = ShellHelper.executePrivileged("sh ${scriptFile.absolutePath}")
@@ -1066,10 +1268,5 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        stopTemperatureMonitoring()
     }
 }

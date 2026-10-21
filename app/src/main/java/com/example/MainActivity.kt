@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1643,13 +1644,41 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         item {
+            // Cabeçalho da Seção com Título, Contador e Botão de Reload
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Apps Ativos (${backgroundApps.size})",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                
+                // Botão de Reload / Atualizar Lista
+                IconButton(onClick = { 
+                    viewModel.scanBackgroundApps() 
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Atualizar lista de apps"
+                    )
+                }
+            }
+
+            // Botão de Parar Todos
             Button(
                 onClick = { viewModel.killAllApps() },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
                 Text("Kill All Background Apps")
             }
         }
+
         items(backgroundApps) { app ->
             Card(
                 modifier = Modifier

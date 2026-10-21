@@ -17,7 +17,7 @@ Game Booster is an Android application designed to optimize your gaming experien
 * **Shizuku Integration:** Enables advanced, system-level control without permanent root.
 
 ### Prerequisites
-This application requires [Shizuku](https://github.com/RikkaApps/Shizuku-API) to be installed and authorized on your device.
+This application requires root mode or [Shizuku](https://github.com/RikkaApps/Shizuku-API) application to be installed and authorized on your device.
 
 ---
 
@@ -38,4 +38,4 @@ O Game Booster é um aplicativo Android projetado para otimizar sua experiência
 * **Integração com Shizuku:** Habilita controle avançado de nível de sistema sem necessidade de root permanente.
 
 ### Pré-requisitos
-Este aplicativo requer o [Shizuku](https://github.com/RikkaApps/Shizuku-API) instalado e autorizado no seu dispositivo.
+Este aplicativo requer o modo root ativado ou o aplicativo [Shizuku](https://github.com/RikkaApps/Shizuku-API) instalado e autorizado no seu dispositivo.

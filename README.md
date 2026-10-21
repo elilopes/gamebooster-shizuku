@@ -1,4 +1,4 @@
-# Game Booster (Android)
+# GFX Game Booster Android
 
 ## English
 

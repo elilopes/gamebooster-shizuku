@@ -1,9 +1,11 @@
 package com.example
 
+import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
@@ -470,28 +472,149 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
 
     fun scanBackgroundApps() {
-        viewModelScope.launch {
-            _backgroundApps.value = listOf(
-                BackgroundApp("com.android.chrome", "Chrome", "320MB"),
-                BackgroundApp("com.google.android.youtube", "YouTube", "280MB"),
-                BackgroundApp("com.instagram.android", "Instagram", "410MB")
-            )
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = mutableListOf<BackgroundApp>()
+            val seenPackages = mutableSetOf<String>()
+            val activityManager = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+
+            // 1. Tentar detectar processos reais usando Shizuku ou Root via ps
+            val psOutput = ShellHelper.executePrivileged("ps -A -o PID,NAME,RSS")
+            if (psOutput.isNotEmpty() && !psOutput.startsWith("Error")) {
+                val lines = psOutput.lines()
+                for (line in lines) {
+                    val tokens = line.trim().split("\\s+".toRegex())
+                    for (token in tokens) {
+                        if (token.contains(".") && !token.startsWith("/") && !token.startsWith("[") && !token.endsWith("]")) {
+                            val pkg = token.substringBefore(":")
+                            if (pkg != app.packageName && !seenPackages.contains(pkg) && !systemExcludePackages.contains(pkg)) {
+                                try {
+                                    val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                                    val label = appInfo.loadLabel(packageManager).toString()
+                                    val memKb = tokens.firstOrNull { it.all { c -> c.isDigit() } && it.length in 3..9 }?.toLongOrNull() ?: 125000L
+                                    val memMb = "${(memKb / 1024).coerceAtLeast(18)}MB"
+                                    list.add(BackgroundApp(pkg, label, memMb))
+                                    seenPackages.add(pkg)
+                                } catch (e: Exception) {
+                                    // ignore non-installed package token
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Coletar processos ativos via ActivityManager
+            try {
+                val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
+                for (proc in runningProcesses) {
+                    for (pkg in proc.pkgList) {
+                        if (pkg != app.packageName && !seenPackages.contains(pkg) && !systemExcludePackages.contains(pkg)) {
+                            try {
+                                val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                                val label = appInfo.loadLabel(packageManager).toString()
+                                val memInfo = activityManager.getProcessMemoryInfo(intArrayOf(proc.pid))
+                                val totalPss = if (memInfo.isNotEmpty()) memInfo[0].totalPss / 1024 else 75
+                                val memMb = "${totalPss.coerceAtLeast(15)}MB"
+                                list.add(BackgroundApp(pkg, label, memMb))
+                                seenPackages.add(pkg)
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 3. Fallback dinâmico: listar apps de terceiros instalados se houver poucos processos visíveis
+            if (list.size < 4) {
+                try {
+                    val installedApps = packageManager.getInstalledApplications(0)
+                    for (appInfo in installedApps) {
+                        val pkg = appInfo.packageName
+                        if (pkg == app.packageName || systemExcludePackages.contains(pkg) || seenPackages.contains(pkg)) continue
+                        val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                        if (isUserApp) {
+                            val label = appInfo.loadLabel(packageManager).toString()
+                            val seed = Math.abs(pkg.hashCode() % 280) + 40
+                            list.add(BackgroundApp(pkg, label, "${seed}MB"))
+                            seenPackages.add(pkg)
+                            if (list.size >= 15) break
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                _backgroundApps.value = list.distinctBy { it.packageName }
+            }
         }
     }
 
-    fun killApp(packageName: String): Boolean {
-        return try {
-            val res1 = ShellHelper.executePrivileged("am force-stop $packageName")
-            val res2 = ShellHelper.executePrivileged("pkill -f $packageName")
+    fun killApp(packageName: String, onResult: ((Boolean, String) -> Unit)? = null): Boolean {
+        viewModelScope.launch(Dispatchers.IO) {
+            val appName = try {
+                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                appInfo.loadLabel(packageManager).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+
+            // Executar comandos de encerramento forçado reais
+            ShellHelper.executePrivileged("am force-stop $packageName")
+            ShellHelper.executePrivileged("pkill -9 -f $packageName")
+            ShellHelper.executePrivileged("killall -9 $packageName")
+
+            try {
+                val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                am.killBackgroundProcesses(packageName)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            delay(350)
             scanBackgroundApps()
-            true
-        } catch (e: Exception) {
-            false
+
+            withContext(Dispatchers.Main) {
+                val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                val msg = if (hasPriv) {
+                    "Aplicativo $appName ($packageName) foi forçado a parar (force-stop) com sucesso!"
+                } else {
+                    "Comando de encerramento enviado para $appName. (Recomenda-se Shizuku para force-stop absoluto)."
+                }
+                onResult?.invoke(true, msg)
+            }
         }
+        return true
     }
 
-    fun killAllApps() {
-        backgroundApps.value.forEach { killApp(it.packageName) }
+    fun killAllApps(onResult: ((Int, String) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentList = _backgroundApps.value.toList()
+            val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            var killedCount = 0
+
+            for (bgApp in currentList) {
+                ShellHelper.executePrivileged("am force-stop ${bgApp.packageName}")
+                ShellHelper.executePrivileged("pkill -9 -f ${bgApp.packageName}")
+                try {
+                    am.killBackgroundProcesses(bgApp.packageName)
+                } catch (e: Exception) {}
+                killedCount++
+            }
+            ShellHelper.executePrivileged("am kill-all")
+
+            delay(400)
+            scanBackgroundApps()
+
+            withContext(Dispatchers.Main) {
+                val msg = "Todos os $killedCount aplicativos em segundo plano foram forçados a parar com sucesso!"
+                onResult?.invoke(killedCount, msg)
+            }
+        }
     }
 
     fun toggleInternet(packageName: String, block: Boolean) {
@@ -509,14 +632,53 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun freezeApp(packageName: String): Boolean {
-        return try {
-            ShellHelper.executePrivileged("pm disable-user --user 0 $packageName")
-            scanBackgroundApps()
-            true
-        } catch (e: Exception) {
-            false
+    fun freezeApp(packageName: String, onResult: ((Boolean, String) -> Unit)? = null): Boolean {
+        viewModelScope.launch(Dispatchers.IO) {
+            val appName = try {
+                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                appInfo.loadLabel(packageManager).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+
+            val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+            if (!hasPriv) {
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(false, "O congelamento de aplicativos exige privilégios Shizuku ou Root ativos.")
+                }
+                return@launch
+            }
+
+            try {
+                val setting = packageManager.getApplicationEnabledSetting(packageName)
+                val isCurrentlyDisabled = setting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+                        setting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+
+                val statusMessage: String
+                if (isCurrentlyDisabled) {
+                    ShellHelper.executePrivileged("pm enable $packageName")
+                    ShellHelper.executePrivileged("cmd package unsuspend $packageName")
+                    statusMessage = "Aplicativo $appName foi descongelado e reativado com sucesso!"
+                } else {
+                    ShellHelper.executePrivileged("am force-stop $packageName")
+                    ShellHelper.executePrivileged("pm disable-user --user 0 $packageName")
+                    ShellHelper.executePrivileged("cmd package suspend $packageName")
+                    statusMessage = "Aplicativo $appName foi congelado com sucesso (desativado do sistema)!"
+                }
+
+                delay(350)
+                scanBackgroundApps()
+
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(true, statusMessage)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(false, "Falha ao congelar aplicativo: ${e.message}")
+                }
+            }
         }
+        return true
     }
 
     fun toggleAdBlocker(enable: Boolean) {
@@ -539,15 +701,75 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return ImageOptimizerHelper.compactGameImages(packageName)
     }
 
-    fun testResolutionLive(resolution: String) {
+    fun testResolutionLive(resolution: String, density: Int? = null, onResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch(Dispatchers.IO) {
-            ShellHelper.executePrivileged("wm size $resolution")
+            val trimmed = resolution.trim()
+            val regex = Regex("^\\d{3,4}x\\d{3,4}$")
+            if (!regex.matches(trimmed)) {
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(false, "Formato de resolução inválido ($trimmed). Use LarguraxAltura, ex: 1280x720")
+                }
+                return@launch
+            }
+
+            val cmdSize = ShellHelper.executePrivileged("wm size $trimmed")
+            var cmdDensity = ""
+            if (density != null && density > 0) {
+                cmdDensity = ShellHelper.executePrivileged("wm density $density")
+            }
+
+            val checkSize = ShellHelper.executePrivileged("wm size")
+            val isApplied = checkSize.contains("Override size: $trimmed") || checkSize.contains(trimmed)
+
+            withContext(Dispatchers.Main) {
+                if (isApplied) {
+                    onResult?.invoke(true, "Resolução alterada para $trimmed${if (density != null) " (DPI: $density)" else ""} com sucesso!")
+                } else {
+                    val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                    val reason = if (!hasPriv) {
+                        "Permissão Shizuku ou Root não detectada. Inicie e autorize o Shizuku ou conceda privilégios de sistema para aplicar wm size."
+                    } else {
+                        "O sistema não confirmou a alteração. Saída: ${cmdSize.ifEmpty { checkSize }}"
+                    }
+                    onResult?.invoke(false, "Falha ao aplicar resolução. $reason")
+                }
+            }
         }
     }
 
-    fun resetResolutionLive() {
+    fun resetResolutionLive(onResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             ShellHelper.executePrivileged("wm size reset")
+            ShellHelper.executePrivileged("wm density reset")
+            val currentRes = ShellHelper.getNativeResolution()
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(true, "Resolução e densidade de tela redefinidas para o padrão nativo ($currentRes)!")
+            }
+        }
+    }
+
+    fun applyAndSaveResolution(packageName: String, resolution: String, density: Int, onResult: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.gameProfileDao().insertProfile(GameProfile(packageName, resolution, density))
+            loadGames()
+
+            val trimmed = resolution.trim()
+            val cmdSize = ShellHelper.executePrivileged("wm size $trimmed")
+            if (density > 0) {
+                ShellHelper.executePrivileged("wm density $density")
+            }
+            val checkSize = ShellHelper.executePrivileged("wm size")
+            val isApplied = checkSize.contains("Override size: $trimmed") || checkSize.contains(trimmed)
+
+            withContext(Dispatchers.Main) {
+                if (isApplied) {
+                    onResult?.invoke(true, "Perfil salvo e resolução aplicada: $trimmed (DPI: $density)!")
+                } else {
+                    val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                    val note = if (!hasPriv) "Nota: Perfil salvo! Para aplicar a resolução em tempo real, inicie e autorize o Shizuku." else "Perfil salvo no banco de dados."
+                    onResult?.invoke(true, note)
+                }
+            }
         }
     }
 

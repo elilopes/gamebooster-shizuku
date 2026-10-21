@@ -17,7 +17,11 @@ object ShizukuHelper {
 
     fun hasPermission(): Boolean {
         return if (isShizukuAvailable()) {
-            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            try {
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            } catch (e: Throwable) {
+                false
+            }
         } else {
             false
         }
@@ -25,16 +29,28 @@ object ShizukuHelper {
 
     fun requestPermission(requestCode: Int = SHIZUKU_PERMISSION_REQUEST_CODE) {
         if (isShizukuAvailable()) {
-            Shizuku.requestPermission(requestCode)
+            try {
+                Shizuku.requestPermission(requestCode)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
         }
     }
 
     fun registerPermissionListener(listener: Shizuku.OnRequestPermissionResultListener) {
-        Shizuku.addRequestPermissionResultListener(listener)
+        try {
+            Shizuku.addRequestPermissionResultListener(listener)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
 
     fun unregisterPermissionListener(listener: Shizuku.OnRequestPermissionResultListener) {
-        Shizuku.removeRequestPermissionResultListener(listener)
+        try {
+            Shizuku.removeRequestPermissionResultListener(listener)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
 
     fun executeCommand(command: String): String {
@@ -42,9 +58,11 @@ object ShizukuHelper {
             val method = Shizuku::class.java.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java)
             method.isAccessible = true
             val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
-            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val stdOut = process.inputStream.bufferedReader().use { it.readText() }
+            val stdErr = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
-            output
+            val result = if (stdOut.isNotEmpty()) stdOut else stdErr
+            result.trim()
         } catch (e: Throwable) {
             "Error: ${e.message}"
         }
@@ -52,8 +70,9 @@ object ShizukuHelper {
 
     fun isRootAvailable(): Boolean {
         return try {
-            val process = Runtime.getRuntime().exec("su -c exit")
-            process.waitFor() == 0
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor() == 0 || output.contains("uid=0")
         } catch (e: Exception) {
             false
         }

@@ -7,11 +7,11 @@ object ShellHelper {
 
     fun execute(command: String): String {
         return try {
-            val process = Runtime.getRuntime().exec(command)
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val output = reader.readText()
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val error = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
-            output.trim()
+            if (output.isNotEmpty()) output.trim() else error.trim()
         } catch (e: Exception) {
             e.printStackTrace()
             ""
@@ -20,17 +20,27 @@ object ShellHelper {
 
     fun executePrivileged(command: String): String {
         return if (ShizukuHelper.hasPermission()) {
-            ShizukuHelper.executeCommand(command).trim()
-        } else if (ShizukuHelper.isRootAvailable()) {
-            try {
-                val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
-                val output = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                output.trim()
-            } catch (e: Exception) {
-                execute(command)
+            val out = ShizukuHelper.executeCommand(command).trim()
+            if ((out.startsWith("Error:") || out.contains("Permission denied", ignoreCase = true)) && ShizukuHelper.isRootAvailable()) {
+                executeRoot(command)
+            } else {
+                out
             }
+        } else if (ShizukuHelper.isRootAvailable()) {
+            executeRoot(command)
         } else {
+            execute(command)
+        }
+    }
+
+    fun executeRoot(command: String): String {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val err = process.errorStream.bufferedReader().use { it.readText() }
+            process.waitFor()
+            if (output.isNotEmpty()) output.trim() else err.trim()
+        } catch (e: Exception) {
             execute(command)
         }
     }

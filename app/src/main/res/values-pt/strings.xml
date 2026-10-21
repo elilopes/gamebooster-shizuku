@@ -149,4 +149,11 @@
     <string name="auto_scan_result">Varredura automática concluída: %d jogos encontrados.</string>
     <string name="no_apps_found">Nenhum aplicativo encontrado.</string>
     <string name="shizuku_optional_tip">Configuração salva. Nota: Inicie e autorize o Shizuku para aplicar otimizações a nível de sistema.</string>
+    <string name="btn_kill_all">Encerrar Todos os Apps em 2º Plano</string>
+    <string name="btn_refresh_list">Atualizar</string>
+    <string name="freeze_dialog_title">Congelamento de App</string>
+    <string name="kill_dialog_title">App Encerrado</string>
+    <string name="kill_all_dialog_title">Encerramento em Massa</string>
+    <string name="resolution_dialog_alert_title">Mudança de Resolução</string>
+    <string name="resolution_apply_now_btn">Aplicar Resolução Agora</string>
 </resources>

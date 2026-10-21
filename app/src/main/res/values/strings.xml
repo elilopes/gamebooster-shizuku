@@ -162,4 +162,11 @@
     <string name="auto_scan_result">Auto Scan complete: %d games found.</string>
     <string name="no_apps_found">No applications found.</string>
     <string name="shizuku_optional_tip">Setting saved. Note: Start and authorize Shizuku to apply system-level commands.</string>
+    <string name="btn_kill_all">Kill All Background Apps</string>
+    <string name="btn_refresh_list">Refresh</string>
+    <string name="freeze_dialog_title">App Freeze</string>
+    <string name="kill_dialog_title">App Terminated</string>
+    <string name="kill_all_dialog_title">Batch Termination</string>
+    <string name="resolution_dialog_alert_title">Resolution</string>
+    <string name="resolution_apply_now_btn">Apply Resolution Now</string>
 </resources>

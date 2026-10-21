@@ -122,11 +122,14 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     val thermalMonitorEnabled by viewModel.thermalMonitorEnabled.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    var termsAccepted by remember { mutableStateOf(prefs.getBoolean("terms_accepted", false)) }
+    var termsChecked by remember { mutableStateOf(false) }
+
     val baseTabs = listOf(
         stringResource(id = R.string.tab_games),
         stringResource(id = R.string.tab_background),
         stringResource(id = R.string.tab_boost_settings),
-        stringResource(id = R.string.tab_image_optimizer),
         stringResource(id = R.string.tab_scripts)
     )
 
@@ -226,7 +229,6 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             currentTabTitle == stringResource(id = R.string.tab_games) -> GameListTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_background) -> BackgroundAppsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
-            currentTabTitle == stringResource(id = R.string.tab_image_optimizer) -> ImageOptimizerTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_scripts) -> ScriptsTab(viewModel)
             else -> GameListTab(viewModel)
         }
@@ -369,6 +371,66 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             }
         )
     }
+
+    if (!termsAccepted) {
+        AlertDialog(
+            onDismissRequest = { /* Não fecha ao clicar fora - aceitação obrigatória para prosseguir */ },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(id = R.string.terms_title),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(id = R.string.terms_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { termsChecked = !termsChecked }
+                    ) {
+                        Checkbox(
+                            checked = termsChecked,
+                            onCheckedChange = { termsChecked = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(id = R.string.terms_accept_checkbox),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (termsChecked) {
+                            prefs.edit().putBoolean("terms_accepted", true).apply()
+                            termsAccepted = true
+                        }
+                    },
+                    enabled = termsChecked
+                ) {
+                    Text(stringResource(id = R.string.terms_start_btn))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -447,92 +509,6 @@ fun ThermalMonitorTab(viewModel: GameViewModel) {
                 Text(
                     text = stringResource(id = R.string.thermal_monitor_warning),
                     style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ImageOptimizerTab(viewModel: GameViewModel) {
-    val inspectedImage by viewModel.inspectedImage.collectAsState()
-    val compressedFile by viewModel.compressedImageFile.collectAsState()
-    var makePermanent by remember { mutableStateOf(false) }
-    var successMsg by remember { mutableStateOf(false) }
-
-    val pickImageLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.inspectSelectedImage(uri)
-            successMsg = false
-        }
-    }
-
-    Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = stringResource(id = R.string.img_opt_title),
-            style = MaterialTheme.typography.titleLarge
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = { pickImageLauncher.launch("image/*") },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(id = R.string.img_opt_pick))
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (inspectedImage != null) {
-            val img = inspectedImage!!
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Resolution: ${img.width} x ${img.height}", style = MaterialTheme.typography.bodyLarge)
-                    Text("Quality Category: ${img.category}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Text("File Size: ${img.sizeBytes / 1024} KB", style = MaterialTheme.typography.bodySmall)
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = makePermanent,
-                            onCheckedChange = { makePermanent = it }
-                        )
-                        Text(stringResource(id = R.string.img_opt_permanent))
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = {
-                            viewModel.compressImageToSd(img.uri, makePermanent)
-                            successMsg = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(id = R.string.img_opt_compress))
-                    }
-                }
-            }
-        }
-
-        if (successMsg && compressedFile != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.img_opt_success),
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
@@ -770,19 +746,6 @@ fun GameListTab(viewModel: GameViewModel) {
                             Text(stringResource(id = R.string.move_obb_btn), style = cardBtnStyle)
                         }
 
-                        OutlinedButton(
-                            onClick = {
-                                val count = viewModel.compactGameImages(game.packageName)
-                                compactResultMsg = if (count > 0) {
-                                    context.getString(R.string.img_compact_success, count)
-                                } else {
-                                    context.getString(R.string.img_compact_none)
-                                }
-                            },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.img_compact_btn), style = cardBtnStyle)
-                        }
 
                         OutlinedButton(
                             onClick = {
@@ -1067,6 +1030,19 @@ fun GameListTab(viewModel: GameViewModel) {
                             )
                         }
 
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.gfx_tuner_warning),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+
                         // Modo Ultra Batata
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1156,7 +1132,47 @@ fun GameListTab(viewModel: GameViewModel) {
                             Text(stringResource(id = R.string.gfx_mute_audio), style = MaterialTheme.typography.bodyMedium)
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Security,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.gfx_backup_option_title),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(id = R.string.gfx_backup_option_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        backupTargetGame = game
+                                        showBackupDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(id = R.string.gfx_backup_btn))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
                         OutlinedButton(
                             onClick = {
                                 viewModel.saveGfxConfig(game.packageName, currentGfxConfig)

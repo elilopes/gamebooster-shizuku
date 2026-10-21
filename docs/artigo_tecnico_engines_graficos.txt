@@ -1,0 +1,364 @@
+================================================================================
+ARTIGO TÉCNICO DE ENGENHARIA DE COMPUTAÇÃO GRÁFICA & DESEMPENHO MOBILE
+Análise Comparativa: Unity, Unreal Engine, Godot Engine e ITsMagic Engine
+Resolução, Sombras, Iluminação, Ray Tracing, Polígonos, Som, Explosões e Água
+================================================================================
+
+1. INTRODUÇÃO AO PIPELINE DE RENDERIZAÇÃO EM DISPOSITIVOS MÓVEIS (ANDROID)
+--------------------------------------------------------------------------------
+Em plataformas móveis (smartphones e tablets), o hardware gráfico (GPU Adreno da 
+Qualcomm, Mali da ARM, PowerVR e Immortalis) opera sob arquitetura baseada em blocos 
+(Tile-Based Deferred Rendering - TBDR).
+Diferente dos computadores de mesa onde a GPU possui centenas de watts de energia e 
+barramento de memória de alta largura de banda dedicado (VRAM dedicada), o chip 
+gráfico do celular compartilha a memória RAM com a CPU e o sistema operacional 
+(Unified Memory Architecture - UMA).
+
+Os três maiores gargalos de desempenho em jogos 3D móveis são:
+a) Fillrate & Overdraw: Custo de pintar o mesmo pixel repetidas vezes devido a 
+   partículas transparentes sobrepostas (fumaça, fogo, explosões, água translúcida).
+b) Largura de Banda de Memória (Memory Bandwidth): Transferência contínua de texturas 
+   pesadas, mapas de sombra em alta resolução e render targets secundários.
+c) Draw Calls & Transformação Geométrica: Processamento de contagem excessiva de 
+   vértices e polígonos que estressam o Vertex Shader e sobrecarregam a CPU na 
+   emissão de comandos gráficos ao driver Vulkan ou OpenGL ES.
+
+Abaixo, detalhamos exatamente como cada um dos 8 aspectos fundamentais da computação 
+gráfica é tratado pelas quatro engines principais: UNITY, UNREAL ENGINE, GODOT ENGINE 
+e ITSMAGIC ENGINE, e os métodos exatos de intervenção e otimização extrema ("Modo Batata").
+
+
+2. ANÁLISE DETALHADA DOS 8 ELEMENTOS GRÁFICOS E DE ÁUDIO
+--------------------------------------------------------------------------------
+
+2.1. RESOLUÇÃO (DISPLAY RESOLUTION vs. INTERNAL RENDER SCALE)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  A resolução define a grade bidimensional de pixels que o rasterizador deve preencher. 
+  Em uma tela 1080p (1080x1920) há aproximadamente 2,07 milhões de pixels por quadro. 
+  Em 60 FPS, são 124 milhões de pixels calculados por segundo. Reduzir a resolução para 
+  720x1280 (0,92 milhão) reduz o esforço do Fragment/Pixel Shader em mais de 55%.
+
+- Na UNITY (ex: Zooba Battle Royale):
+  O Unity possui duas formas de alterar resolução:
+  1) `Screen.SetResolution(width, height, fullscreen)`
+  2) `ScalableBufferManager.ResizeBuffers(widthScale, heightScale)`
+  No Android, o Unity lê chaves salvas no PlayerPrefs: `Screenmanager Resolution Width` 
+  e `Screenmanager Resolution Height`. Além disso, o comando de sistema via Shizuku 
+  `wm size <largura>x<altura>` intercepta o SurfaceFlinger no nível do Android, 
+  forçando o viewport inteiro do Unity a se adaptar à nova geometria de tela.
+
+- Na UNREAL ENGINE (ex: PUBG Mobile, Fortnite):
+  A Unreal possui um motor de escalonamento dinâmico e estático controlado por:
+  `r.ScreenPercentage` (de 10 a 100).
+  Injetado via `UserCustom.ini` ou `Scalability.ini`. Definir `r.ScreenPercentage=50` 
+  faz o jogo renderizar internamente a 540p e projetar para 1080p via filtro bilinear 
+  ou temporal (TAAU).
+
+- Na GODOT ENGINE (ex: OpenLiberty, KYRO):
+  O Godot gerencia isso via `Viewport` e `display/window/size/viewport_width` e 
+  `viewport_height`, além de `scaling_3d/scale`.
+  Pode ser sobrescrito pelo arquivo `override.cfg` com `scaling_3d/scale=0.5` ou 
+  argumento de linha de comando no Android `_cmdline.txt`: `--resolution 640x360`.
+
+- Na ITSMAGIC ENGINE:
+  A ITsMagic possui no seu loop de renderização do `SurfaceView` / `GLSurfaceView` um 
+  redimensionamento do Framebuffer nativo (EGL).
+  Pode ser controlado por `engine_settings.json` através de `renderScale` (0.25 a 1.0) 
+  ou via comando do sistema Android `wm size`.
+
+
+2.2. SOMBRAS (SHADOW MAPPING, CASCADED SHADOWS & ATLAS)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  Sombras dinâmicas em tempo real exigem que a engine renderize toda a geometria do 
+  cenário a partir da perspectiva de cada fonte de luz em um buffer de profundidade 
+  (Depth Texture / Shadow Map). Em jogos com sol direcional, utilizam-se Cascaded 
+  Shadow Maps (CSM), renderizando a cena até 4 vezes por quadro.
+
+- Na UNITY:
+  Controlado por `QualitySettings.shadows` (`ShadowQuality.Disable`, `HardOnly`, 
+  `All`). O tamanho do atlas é definido por `shadowResolution`.
+  Intervenção extrema: Alterar no PlayerPrefs `QualitySettings.QualityLevel = 0` 
+  (Fastest) ou `ShadowQuality = 0`. O Unity desativa o passo de renderização do 
+  Shadow Map, eliminando centenas de chamadas de desenho repetidas.
+
+- Na UNREAL ENGINE:
+  Controlado por `r.ShadowQuality` (0 a 4) e `r.Shadow.DistanceScale`.
+  Intervenção extrema via `UserCustom.ini`:
+  `+CVars=r.ShadowQuality=0`
+  `+CVars=r.Shadow.DistanceScale=0`
+  `+CVars=r.DistanceFieldShadowing=0`
+  A Unreal desliga as sombras dinâmicas e libera imensa largura de banda de VRAM.
+
+- Na GODOT ENGINE:
+  O Godot 3 e 4 gerenciam sombras no nó `DirectionalLight3D` e no `shadow_atlas`.
+  Intervenção extrema via `override.cfg`:
+  `[rendering]`
+  `quality/shadow_atlas/size=0`
+  `quality/directional_shadow/size=0`
+  `quality/shadows/filter_mode=0`
+  Definir `shadow_atlas/size=0` força a Godot a abortar a alocação e cálculo de 
+  sombras em todo o mundo 3D.
+
+- Na ITSMAGIC ENGINE:
+  A ITsMagic possui um passe de sombra direcional ativado no componente `Light`.
+  Intervenção extrema via `engine_settings.json` e `shared_prefs`:
+  `"shadows": false`
+  `"shadowQuality": 0`
+  `"shadowDistance": 0.0`
+  O pipeline OpenGL da ITsMagic pula a subrotina `renderShadowMap()`.
+
+
+2.3. ILUMINAÇÃO (FORWARD, DEFERRED & VERTEX SHADING)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  Iluminação por pixel (Per-pixel PBR - Physically Based Rendering) calcula as equações 
+  de Cook-Torrance ou Lambertiana para cada pixel visível. Em dispositivos modestos, 
+  isso satura as ALUs (unidades aritméticas) da GPU.
+  A alternativa ultrarrápida é o Vertex Shading: a luz é calculada apenas nos 
+  vértices da geometria e interpolada no triângulo pelo rasterizador.
+
+- Na UNITY:
+  O modo Forward Renderer calcula a luz principal e descarta luzes pontuais secundárias 
+  se `QualitySettings.pixelLightCount = 0`.
+  Forçar `QualityLevel = 0` desativa luzes por pixel adicionais e reflexões esféricas.
+
+- Na UNREAL ENGINE:
+  A Unreal Mobile utiliza Forward Shading com suporte a iluminação estática ou dinâmica.
+  Comandos como `+CVars=r.DynamicGlobalIlluminationMethod=0` e `r.LightShafts=0` 
+  eliminam feixes de luz volumétrica e cálculos complexos de scattering.
+
+- Na GODOT ENGINE:
+  O Godot possui a opção clássica:
+  `quality/shading/force_vertex_shading=true`
+  `quality/shading/force_lambert_over_burley=true`
+  Isso substitui o pesado modelo microfacetado Burley por Lambert simples calculado 
+  por vértice. É uma das otimizações mais impactantes da Godot Engine no Android.
+
+- Na ITSMAGIC ENGINE:
+  Materiais da ITsMagic suportam Shaders Básicos sem reflexão. No `engine_settings.json`, 
+  desativar `pbrLighting=false` e `ambientOcclusion=false` força a engine a usar cálculo 
+  de iluminação difusa plana (Unlit/Simple Diffuse).
+
+
+2.4. RAY TRACING (HARDWARE DXR/VULKAN vs. SOFTWARE SDF / GI)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  O Ray Tracing clássico calcula interseções raio-triângulo no espaço 3D para gerar 
+  reflexos, sombras e iluminação global perfeitos. Em chips mobile, o Ray Tracing por 
+  hardware só começou a surgir nos chips topo de linha recentes (Snapdragon 8 Gen 2/3, 
+  Dimensity 9300) via Vulkan Ray Query.
+  Porém, muitas engines usam "Ray Tracing por Software" (como o Lumen na Unreal e 
+  SDFGI / Voxel GI na Godot), simulando raios por campos de distância de sinais.
+
+- Na UNITY:
+  Não costuma ter Ray Tracing ativo no Android para jogos como Zooba. O que existe é 
+  Reflexão em Tempo Real (Screen Space Reflections) e oclusão de ambiente (SSAO). 
+  Desativar `ReflectionsEnabled=0` e `SSAO=0` no PlayerPrefs elimina essa carga.
+
+- Na UNREAL ENGINE:
+  A Unreal 5 introduziu Lumen e hardware ray tracing.
+  Comandos essenciais no `UserCustom.ini`:
+  `+CVars=r.RayTracing=0`
+  `+CVars=r.Lumen.DiffuseIndirect.Allow=0`
+  `+CVars=r.Lumen.Reflections.Allow=0`
+  Garante que nenhum raio de iluminação indireta seja disparado.
+
+- Na GODOT ENGINE (ex: projeto RayTracingGodot):
+  O Godot 4 utiliza SDFGI (Signed Distance Field Global Illumination) e Voxel GI.
+  Intervenção via `override.cfg`:
+  `quality/sdfgi/enabled=false`
+  `quality/voxel_gi/quality=0`
+  `quality/ssr/enabled=false`
+  Desliga qualquer rastreamento de raios em espaço de tela ou volume voxelizado.
+
+- Na ITSMAGIC ENGINE:
+  A ITsMagic não possui Ray Tracing acelerado por hardware, mas implementa reflexões 
+  de espaço de tela e câmeras secundárias. São desativadas com `"waterReflection": false` 
+  e `"ssao": false`.
+
+
+2.5. POLÍGONOS E MALHA 3D (LOD - LEVEL OF DETAIL & CULLING)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  Cada modelo 3D é composto por vértices e triângulos. O Vertex Shader processa cada 
+  vértice individualmente. Se uma cena tiver 1.000.000 de polígonos, a GPU móvel sofre 
+  estrangulamento na etapa de montagem de primitivas (Geometry Bottleneck).
+  O sistema LOD (Level of Detail) substitui o modelo por versões de 500 ou 100 polígonos 
+  conforme a distância da câmera.
+
+- Na UNITY (ex: Zooba):
+  O Unity possui `QualitySettings.lodBias`.
+  Um `lodBias = 2.0` força modelos com alto nível de detalhe mesmo de longe.
+  Ao forçar `unity.lod_bias = 0.3` no PlayerPrefs, o Unity escolhe antecipadamente a 
+  versão mais simples e com menos polígonos de cada personagem, árvore e obstáculo.
+
+- Na UNREAL ENGINE:
+  A Unreal possui um dos sistemas mais robustos de LOD.
+  No `UserCustom.ini`:
+  `+CVars=r.StaticMeshLODDistanceScale=0.1` (reduz malhas estáticas)
+  `+CVars=r.SkeletalMeshLODBias=4` (força personagens nos LODs mais baixos)
+  Isso transforma os personagens em modelos com geometria simplificada ("Low Poly"), 
+  aliviando instantaneamente a GPU.
+
+- Na GODOT ENGINE:
+  No Godot 4, o sistema de malhas possui `mesh_lod_threshold`.
+  No `override.cfg`:
+  `quality/mesh_lod/lod_change_distance_bias=0.2`
+  Força a substituição rápida dos modelos para as versões simplificadas.
+
+- Na ITSMAGIC ENGINE:
+  A ITsMagic depende fortemente da distância de visão (`renderDistance`).
+  Definir `"renderDistance": 40.0` e `"terrainLOD": 0` no `engine_settings.json` 
+  garante que nada além de 40 metros seja rasterizado, reduzindo drasticamente o total 
+  de polígonos desenhados.
+
+
+2.6. SOM (AUDIO ENGINES, THREAD OVERHEAD & BUFFER DE SOM)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  O subsistema de som não roda na GPU, mas consome tempo valioso de processamento da CPU. 
+  Efeitos 3D de áudio, reverberação (reverb), atenuação de distância, decodificação de 
+  áudio MP3/OGG/Vorbis e mixagem multicanal ocupam uma ou duas threads da CPU em 
+  tempo integral, aquecendo o processador e causando throttling térmico.
+
+- Na UNITY:
+  O Unity utiliza a biblioteca de terceiros FMOD internamente para mixagem de áudio.
+  Ao injetar `unity.muted = 1`, `MusicVolume = 0.0` e `SfxVolume = 0.0` no PlayerPrefs, 
+  as rotinas de decodificação de samples são ignoradas.
+  A nível de Android Shizuku: `cmd media_session volume --stream 3 --set 0` silencia 
+  o canal de mídia diretamente no AudioServer.
+
+- Na UNREAL ENGINE:
+  A Unreal utiliza o Unreal Audio Engine.
+  Pode ser desativado ou reduzido com comandos ou mutado no sistema Android.
+
+- Na GODOT ENGINE:
+  O Godot possui suporte nativo para desativar seu driver de áudio:
+  No `override.cfg`:
+  `[audio]`
+  `driver/enable=false`
+  Ou no `_cmdline.txt`: `--audio-driver Dummy`
+  Isso substitui o driver de som por um driver nulo, poupando 100% dos ciclos de CPU 
+  gastos com áudio.
+
+- Na ITSMAGIC ENGINE:
+  Utiliza o sistema de som do Android (`SoundPool` / `AudioTrack` ou OpenSL ES).
+  Configurações no `engine_settings.json`:
+  `"audioEnabled": false`, `"masterVolume": 0.0`
+  Desliga as chamadas para a API de áudio nativa.
+
+
+2.7. EXPLOSÕES E PARTÍCULAS (OVERDRAW & ALPHA BLENDING)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  Explosões, fumaça, fogo e magia em jogos são gerados por Sistemas de Partículas. 
+  Cada partícula é geralmente um plano (quad/quadrilátero) composto por 2 triângulos 
+  com textura transparente (Alpha Blending).
+  Quando dezenas de partículas de explosão se sobrepõem na frente da câmera, o mesmo 
+  pixel é recalculado e mesclado 20, 30 ou 50 vezes no mesmo quadro. Esse fenômeno é 
+  chamado de **Overdraw** e é a causa número um de quedas violentas de quadros (stuttering) 
+  em combates e tiroteios.
+
+- Na UNITY (ex: Zooba):
+  Usa os sistemas Shuriken Particle System ou VFX Graph.
+  No PlayerPrefs: `ParticleRaycastBudget = 16` e `QualitySettings.QualityLevel = 0` 
+  restringe o número máximo de partículas ativas e desativa colisões físicas das 
+  partículas com o chão.
+
+- Na UNREAL ENGINE:
+  Usa o poderoso sistema Niagara ou Cascade.
+  No `UserCustom.ini`:
+  `+CVars=r.ParticleLODBias=10`
+  `+CVars=r.Emitter.FastPath=1`
+  Força as partículas a emitirem o mínimo de quads por explosão, eliminando faíscas e 
+  fumaças volumétricas.
+
+- Na GODOT ENGINE:
+  Usa nós `GPUParticles3D` e `CPUParticles3D`.
+  No `override.cfg`:
+  `quality/particles/amount_ratio=0.1`
+  Reduz a emissão de partículas de toda a cena para apenas 10% da quantidade padrão.
+
+- Na ITSMAGIC ENGINE:
+  Usa o componente `ParticleSystem`.
+  No `engine_settings.json`:
+  `"particlesEnabled": false`, `"maxParticles": 10`
+  Limita o emissor a no máximo 10 partículas ou desativa por completo.
+
+
+2.8. EFEITOS DA ÁGUA (SHADERS, REFRAÇÃO, REFLEXÃO E PROFUNDIDADE)
+--------------------------------------------------------------------------------
+- Funcionamento Geral:
+  A água em jogos modernos é um dos shaders mais pesados:
+  1) Requer calcular a profundidade da água (Depth Fade) comparando com o fundo.
+  2) Requer distorção UV com mapas de vetores normais para criar ondas.
+  3) Requer reflexo do céu ou do cenário (via cubemaps ou planar reflection).
+  4) Requer refração (distorcer o que está debaixo da água).
+
+- Na UNITY (ex: Zooba):
+  A água é renderizada com um shader específico da Unity.
+  Ao injetar `WaterQuality = 0` e `ReflectionsEnabled = 0`, a engine desativa 
+  as passagens de refração e substitui a superfície por uma cor opaca sem reflexo.
+
+- Na UNREAL ENGINE:
+  A Unreal possui o plugin avançado Water System (SingleLayerWater).
+  No `UserCustom.ini`:
+  `+CVars=r.Water.SingleLayer=0`
+  `+CVars=r.Water.SingleLayer.Reflection=0`
+  Remove os cálculos de refração óptica e espelho d'água.
+
+- Na GODOT ENGINE:
+  No Godot, água é criada com shaders espaciais customizados.
+  No `override.cfg`:
+  `quality/reflections/roughness_layers=0`
+  `quality/ssr/enabled=false`
+  Elimina o reflexo especular de superfície da água.
+
+- Na ITSMAGIC ENGINE:
+  A ITsMagic possui um shader de água com ondas dinâmicas.
+  No `engine_settings.json`:
+  `"waterReflection": false`, `"waterQuality": 0`, `"waterEnabled": false`
+  Desliga o passe de textura de reflexão da água.
+
+
+3. QUADRO RESUMO DE COMANDOS POR ENGINE PARA O MODO BATATA
+--------------------------------------------------------------------------------
++-------------------+----------------------------+-----------------------------+
+| Engine            | Arquivo Alvo no Android    | Comandos / Chaves Chave     |
++-------------------+----------------------------+-----------------------------+
+| UNITY             | shared_prefs/              | QualityLevel=0              |
+| (ex: Zooba)       | <pkg>.v2.playerprefs.xml   | ShadowQuality=0             |
+|                   |                            | unity.lod_bias=0.3          |
+|                   |                            | WaterQuality=0              |
+|                   |                            | unity.muted=1               |
++-------------------+----------------------------+-----------------------------+
+| UNREAL ENGINE     | files/UE4Game/...          | r.ShadowQuality=0           |
+| (ex: PUBG)        | UserCustom.ini             | r.RayTracing=0              |
+|                   |                            | r.StaticMeshLODDistanceScale=0.1|
+|                   |                            | r.ParticleLODBias=10        |
+|                   |                            | r.Water.SingleLayer=0       |
++-------------------+----------------------------+-----------------------------+
+| GODOT ENGINE      | files/override.cfg         | shadow_atlas/size=0         |
+| (ex: OpenLiberty) | files/_cmdline.txt         | force_vertex_shading=true   |
+|                   |                            | particles/amount_ratio=0.1  |
+|                   |                            | rendering_method=gl_compat  |
+|                   |                            | audio/driver/enable=false   |
++-------------------+----------------------------+-----------------------------+
+| ITSMAGIC ENGINE   | files/engine_settings.json | "shadows": false            |
+|                   | files/settings.json        | "renderDistance": 40.0      |
+|                   |                            | "waterReflection": false    |
+|                   |                            | "particlesEnabled": false   |
+|                   |                            | "audioEnabled": false       |
++-------------------+----------------------------+-----------------------------+
+
+4. SEGURANÇA, TERMOS DE USO E PRECAUÇÕES
+--------------------------------------------------------------------------------
+Modificações gráficas extremas alteram parâmetros em disco ou memória do jogo.
+Muitos jogos competitivos online (Battle Royale, FPS) utilizam sistemas de anti-trapaça 
+(Tencent ACE, BattlEye, Easy Anti-Cheat, NetEase Security) que podem considerar a 
+remoção de fumaça, sombras ou água como vantagem indevida de visão (Wallhack/ESP).
+Portanto, a realização de BACKUP prévio dos arquivos originais e a ciência do usuário 
+são etapas obrigatórias antes da aplicação de perfis GFX.
+================================================================================

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Game Booster</string>
+    <string name="app_name">GFX Game Booster</string>
     <string name="menu_language">Language</string>
     <string name="menu_about">About</string>
     <string name="about_title">About Game Booster</string>
@@ -31,7 +31,8 @@
     <string name="pak_bundle_compression_title">.pak &amp; .bundle Compression</string>
     <string name="pak_bundle_safe_notice">No integrity verification system detected. Safe to compress .pak and .bundle assets without detection issues.</string>
     <string name="pak_bundle_blocked_notice">Active integrity system detected. Compression is blocked to prevent data mismatch or bans.</string>
-    <string name="gfx_tuner_title">GFX Tuner / Potato Mode</string>
+    <string name="gfx_tuner_title">GFX Tuner downgrade mode</string>
+    <string name="gfx_tuner_warning">Some of these optimizations may be considered cheating by game developers, potentially leading to account bans.</string>
     <string name="gfx_tuner_btn">GFX Tuner</string>
     <string name="gfx_extreme_potato">Ultra Potato Mode (All Effects Minimal)</string>
     <string name="gfx_disable_shadows">Disable Shadows &amp; Lighting</string>
@@ -40,7 +41,14 @@
     <string name="gfx_disable_explosions">Reduce Explosions &amp; Particles</string>
     <string name="gfx_mute_audio">Mute Game Audio &amp; Sounds</string>
     <string name="gfx_apply_now">Apply GFX Now</string>
-    <string name="gfx_engine_note">Engine: %s (Unity/Zooba or Unreal Engine optimization)</string>
+    <string name="gfx_engine_note">Engine: %s (Unity, Godot, ITsMagic, Unreal optimization)</string>
+    <string name="gfx_backup_option_title">Game Backup (Optional)</string>
+    <string name="gfx_backup_option_desc">Optionally create a backup before applying modifications.</string>
+    <string name="gfx_backup_btn">Backup Game Now (Optional)</string>
+    <string name="terms_title">Terms of Use</string>
+    <string name="terms_body">Esta aplicação não é responsável por instabilidades no sistema, reinícios não solicitados, superaquecimento do dispositivo. Algumas otimizações/modificações que esta aplicação os desenvolvedores de jogos podem reconhecer como uso de trapaça e fazer o banimento da conta do usuário. Faça o backup dos jogos antes das alterações.</string>
+    <string name="terms_accept_checkbox">Aceito os termos de uso</string>
+    <string name="terms_start_btn">Iniciar</string>
     <string name="scripts_tab_title">Custom Shell Scripts (.sh)</string>
     <string name="scripts_tab_desc">Execute custom shell scripts or Game Tuner scripts with Shizuku privileges:</string>
     <string name="scripts_run_btn">Run Script</string>

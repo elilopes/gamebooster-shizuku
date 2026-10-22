@@ -13,8 +13,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,10 +50,8 @@ import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
 
-    private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
-        if (grantResult == PackageManager.PERMISSION_GRANTED) {
-            // Permission granted
-        }
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, _ ->
+        ShizukuHelper.updateStatus()
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -84,6 +84,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        ShizukuHelper.updateStatus()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         ShizukuHelper.unregisterPermissionListener(permissionListener)
@@ -92,30 +97,73 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SystemStatusBadge() {
-    val isShizukuActive = remember { mutableStateOf(ShizukuHelper.hasPermission()) }
+    val isShizukuActive by ShizukuHelper.isShizukuGranted.collectAsState()
+    val isBinderAlive by ShizukuHelper.isBinderAlive.collectAsState()
     val isRootActive = remember { mutableStateOf(ShizukuHelper.isRootAvailable()) }
-    
-    LaunchedEffect(Unit) {
-        isShizukuActive.value = ShizukuHelper.hasPermission()
-        isRootActive.value = ShizukuHelper.isRootAvailable()
+    val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                ShizukuHelper.updateStatus()
+                isRootActive.value = ShizukuHelper.isRootAvailable()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
-    val isActive = isShizukuActive.value || isRootActive.value
+    val isActive = isShizukuActive || isRootActive.value
     val statusText = when {
         isRootActive.value -> "Root: ON"
-        isShizukuActive.value -> "Shizuku: ON"
+        isShizukuActive -> "Shizuku: ON"
+        isBinderAlive -> "Shizuku: PENDENTE (Toque p/ autorizar)"
         else -> "Root/Shizuku: OFF"
     }
 
+    val containerColor = when {
+        isActive -> MaterialTheme.colorScheme.primaryContainer
+        isBinderAlive -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.errorContainer
+    }
+
+    val contentColor = when {
+        isActive -> MaterialTheme.colorScheme.onPrimaryContainer
+        isBinderAlive -> MaterialTheme.colorScheme.onTertiaryContainer
+        else -> MaterialTheme.colorScheme.onErrorContainer
+    }
+
     Surface(
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-        shape = MaterialTheme.shapes.small
+        color = containerColor,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.clickable {
+            if (isBinderAlive && !isShizukuActive) {
+                val sent = ShizukuHelper.requestPermission()
+                if (!sent) {
+                    val opened = ShizukuHelper.openShizukuApp(context)
+                    if (opened) {
+                        Toast.makeText(context, "Abra o Shizuku e conceda a permissão ao aplicativo.", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "Inicie o serviço do Shizuku no dispositivo.", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Solicitando autorização ao Shizuku...", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                ShizukuHelper.updateStatus()
+                isRootActive.value = ShizukuHelper.isRootAvailable()
+                Toast.makeText(context, "Status atualizado: $statusText", Toast.LENGTH_SHORT).show()
+            }
+        }
     ) {
         Text(
             text = statusText,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+            color = contentColor
         )
     }
 }
@@ -620,27 +668,41 @@ fun GameListTab(viewModel: GameViewModel) {
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    uriHandler.openUri("https://github.com/RikkaApps/Shizuku-API")
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(id = R.string.shizuku_download_btn),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
+                            val isShizukuGranted by ShizukuHelper.isShizukuGranted.collectAsState()
+                            val isBinderAlive by ShizukuHelper.isBinderAlive.collectAsState()
                             Button(
                                 onClick = {
-                                    if (ShizukuHelper.isShizukuAvailable() && !ShizukuHelper.hasPermission()) {
-                                        ShizukuHelper.requestPermission()
+                                    if (!isShizukuGranted) {
+                                        val requested = ShizukuHelper.requestPermission()
+                                        if (!requested) {
+                                            val opened = ShizukuHelper.openShizukuApp(context)
+                                            if (opened) {
+                                                Toast.makeText(context, "Abra o Shizuku e aprove a permissão para este aplicativo.", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                Toast.makeText(context, "Serviço Shizuku não detectado. Inicie o Shizuku primeiro.", Toast.LENGTH_LONG).show()
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "Solicitação enviada. Confirme na janela do Shizuku.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "Shizuku já está autorizado e ativo!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = when {
+                                        isShizukuGranted -> MaterialTheme.colorScheme.primary
+                                        isBinderAlive -> MaterialTheme.colorScheme.tertiary
+                                        else -> MaterialTheme.colorScheme.secondary
+                                    }
+                                ),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = if (ShizukuHelper.hasPermission()) stringResource(id = R.string.game_shizuku_active) else stringResource(id = R.string.game_shizuku_authorize),
+                                    text = when {
+                                        isShizukuGranted -> "Shizuku Ativo"
+                                        isBinderAlive -> "Ativar Shizuku"
+                                        else -> "Ativar Shizuku"
+                                    },
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -1670,12 +1732,16 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
 
             // Botão de Parar Todos
             Button(
-                onClick = { viewModel.killAllApps() },
+                onClick = {
+                    viewModel.killAllApps { _, msg ->
+                        killAlertMsg = msg
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                Text("Kill All Background Apps")
+                Text(stringResource(id = R.string.btn_kill_all))
             }
         }
 
@@ -1706,11 +1772,8 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
                                 )
                             }
                             TextButton(onClick = {
-                                val success = viewModel.killApp(app.packageName)
-                                killAlertMsg = if (success) {
-                                    context.getString(R.string.kill_success)
-                                } else {
-                                    context.getString(R.string.kill_fail)
+                                viewModel.killApp(app.packageName) { _, msg ->
+                                    killAlertMsg = msg
                                 }
                             }) { Text(stringResource(id = R.string.btn_kill)) }
                             TextButton(onClick = { viewModel.freezeApp(app.packageName) }) {
@@ -2032,28 +2095,28 @@ fun ScriptsTab(viewModel: GameViewModel) {
             Text(stringResource(id = R.string.scripts_run_btn))
         }
 
-        if (executionOutput != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        val commandLog by ShellFunctions.commandLog.collectAsState()
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        
+        LaunchedEffect(commandLog) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black)
+                    .padding(8.dp)
+                    .verticalScroll(scrollState)
             ) {
-                Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
-                    Text(
-                        text = stringResource(id = R.string.scripts_output_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyColumn {
-                        item {
-                            Text(
-                                text = executionOutput!!,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = commandLog.joinToString("\n"),
+                    color = androidx.compose.ui.graphics.Color.Green,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

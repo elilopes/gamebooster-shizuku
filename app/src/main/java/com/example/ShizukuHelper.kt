@@ -1,11 +1,77 @@
 package com.example
 
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import rikka.shizuku.Shizuku
 
 object ShizukuHelper {
 
-    private const val SHIZUKU_PERMISSION_REQUEST_CODE = 1001
+    const val SHIZUKU_PERMISSION_REQUEST_CODE = 1001
+
+    // Listener opcional para notificação direta
+    var onShizukuStatusChanged: ((Boolean) -> Unit)? = null
+
+    // StateFlow observável pelo Jetpack Compose indicando se a permissão foi concedida
+    private val _isShizukuGranted = MutableStateFlow(false)
+    val isShizukuGranted: StateFlow<Boolean> = _isShizukuGranted.asStateFlow()
+
+    // StateFlow indicando se o serviço do Shizuku está em execução no dispositivo (binder conectado)
+    private val _isBinderAlive = MutableStateFlow(false)
+    val isBinderAlive: StateFlow<Boolean> = _isBinderAlive.asStateFlow()
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        updateStatus()
+    }
+
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        updateStatus()
+    }
+
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, _ ->
+        updateStatus()
+    }
+
+    init {
+        try {
+            // Registra os listeners adesivos/dinâmicos para capturar conexões presentes e futuras
+            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+            Shizuku.addBinderDeadListener(binderDeadListener)
+            Shizuku.addRequestPermissionResultListener(permissionListener)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        updateStatus()
+    }
+
+    /**
+     * Atualiza o estado da conexão e da permissão do Shizuku.
+     * Pode ser chamado a qualquer momento (por exemplo, no onResume da Activity).
+     */
+    fun updateStatus() {
+        val available = isShizukuAvailable()
+        _isBinderAlive.value = available
+
+        val granted = if (available) {
+            try {
+                if (!Shizuku.isPreV11()) {
+                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                } else {
+                    false
+                }
+            } catch (e: Throwable) {
+                false
+            }
+        } else {
+            false
+        }
+
+        _isShizukuGranted.value = granted
+        onShizukuStatusChanged?.invoke(granted)
+    }
 
     fun isShizukuAvailable(): Boolean {
         return try {
@@ -18,7 +84,11 @@ object ShizukuHelper {
     fun hasPermission(): Boolean {
         return if (isShizukuAvailable()) {
             try {
-                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                if (!Shizuku.isPreV11()) {
+                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                } else {
+                    false
+                }
             } catch (e: Throwable) {
                 false
             }
@@ -27,13 +97,112 @@ object ShizukuHelper {
         }
     }
 
-    fun requestPermission(requestCode: Int = SHIZUKU_PERMISSION_REQUEST_CODE) {
-        if (isShizukuAvailable()) {
-            try {
-                Shizuku.requestPermission(requestCode)
-            } catch (e: Throwable) {
-                e.printStackTrace()
+    /**
+     * Solicita permissão ao Shizuku. Retorna true se o pedido foi enviado com sucesso.
+     */
+    fun requestPermission(requestCode: Int = SHIZUKU_PERMISSION_REQUEST_CODE): Boolean {
+        return try {
+            if (isShizukuAvailable()) {
+                if (!Shizuku.isPreV11()) {
+                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                        updateStatus()
+                        true
+                    } else {
+                        Shizuku.requestPermission(requestCode)
+                        true
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
             }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Tenta iniciar o serviço do Shizuku automaticamente no dispositivo (semelhante a Tasker / MacroDroid).
+     * Executa o script de inicialização do Shizuku via adb shell / sh local.
+     */
+    fun startShizukuService(context: Context): String {
+        return try {
+            val scriptPaths = listOf(
+                "/storage/emulated/0/Android/data/moe.shizuku.privileged.api/files/start.sh",
+                "/storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh",
+                "/sdcard/Android/data/moe.shizuku.privileged.api/start.sh",
+                "/data/user_de/0/moe.shizuku.privileged.api/files/start.sh"
+            )
+
+            var executed = false
+            var outputResult = ""
+
+            // 1. Tentar executar via root se disponível
+            if (isRootAvailable()) {
+                for (path in scriptPaths) {
+                    val f = java.io.File(path)
+                    if (f.exists()) {
+                        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh $path"))
+                        val out = process.inputStream.bufferedReader().use { it.readText() }
+                        val err = process.errorStream.bufferedReader().use { it.readText() }
+                        process.waitFor()
+                        outputResult = if (out.isNotEmpty()) out else err
+                        executed = true
+                        break
+                    }
+                }
+                if (!executed) {
+                    // Tentar comando direto app_process do Shizuku com root
+                    val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh"))
+                    outputResult = process.inputStream.bufferedReader().use { it.readText() }
+                    executed = true
+                }
+            } else {
+                // 2. Tentar executar sem root (requer ADB Wireless ativado na mesma rede/localhost)
+                for (path in scriptPaths) {
+                    val f = java.io.File(path)
+                    if (f.exists()) {
+                        val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "sh $path"))
+                        val out = process.inputStream.bufferedReader().use { it.readText() }
+                        process.waitFor()
+                        outputResult = out
+                        executed = true
+                        break
+                    }
+                }
+            }
+
+            if (!executed) {
+                // Tenta abrir o app Shizuku como fallback principal se o script não for achado
+                openShizukuApp(context)
+                "Aplicativo Shizuku aberto. Certifique-se de iniciar o serviço nas Opções do Desenvolvedor (Depuração sem fio)."
+            } else {
+                updateStatus()
+                outputResult.ifEmpty { "Comando de inicialização enviado ao Shizuku." }
+            }
+        } catch (e: Exception) {
+            "Erro ao iniciar Shizuku: ${e.message}"
+        }
+    }
+
+    /**
+     * Abre diretamente o aplicativo Shizuku para que o usuário possa conceder a permissão manualmente
+     * caso o popup de autorização tenha sido bloqueado ou ignorado.
+     */
+    fun openShizukuApp(context: Context): Boolean {
+        return try {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launchIntent)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -55,7 +224,12 @@ object ShizukuHelper {
 
     fun executeCommand(command: String): String {
         return try {
-            val method = Shizuku::class.java.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java)
+            val method = Shizuku::class.java.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
             method.isAccessible = true
             val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
             val stdOut = process.inputStream.bufferedReader().use { it.readText() }

@@ -1,29 +1,46 @@
 package com.example
 
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
 
-object ShellHelper {
+object ShellFunctions {
 
-// Apenas para comandos que NÃO exigem privilégios de sistema
+    private val _commandLog = MutableStateFlow<List<String>>(emptyList())
+    val commandLog: StateFlow<List<String>> = _commandLog.asStateFlow()
+
+    private fun log(message: String) {
+        runBlocking(Dispatchers.Default) {
+            _commandLog.value = _commandLog.value + message
+        }
+    }
+
+    // Apenas para comandos que NÃO exigem privilégios de sistema
     fun execute(command: String): String {
+        log("$ $command")
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
             val output = process.inputStream.bufferedReader().use { it.readText() }
             val error = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
-            if (output.isNotEmpty()) output.trim() else error.trim()
+            val result = if (output.isNotEmpty()) output.trim() else error.trim()
+            log("> $result")
+            result
         } catch (e: Exception) {
             e.printStackTrace()
+            log("> Error: ${e.message}")
             ""
         }
     }
 
     /**
      * Executa comandos privilegiados (como am force-stop, wm size, etc.)
-     * REGRA: Exige obrigatoriamente Shizuku ativo. NUNCA cai para o shell comum do app.
+     * REGRA: Exige obrigatoriamente Shizuku ativo ou Root.
      */
     fun executePrivileged(command: String): String {
+        log("# $command")
         return try {
             // 1. Verifica rigorosamente se o Shizuku está rodando e tem permissão
             if (ShizukuHelper.hasPermission()) {
@@ -33,9 +50,11 @@ object ShellHelper {
                     if (ShizukuHelper.isRootAvailable()) {
                         executeRoot(command)
                     } else {
+                        log("> Error: Shizuku falhou ao executar o comando.")
                         "Error: Shizuku falhou ao executar o comando."
                     }
                 } else {
+                    log("> $out")
                     out
                 }
             } 
@@ -45,9 +64,11 @@ object ShellHelper {
             } 
             // 3. SE NENHUM DOS DOIS ESTIVER ATIVO: Bloqueia e impede o shell comum!
             else {
-                "Error: Shizuku desativado. É necessário ativar o Shizuku para forçar a parada de aplicativos."
+                log("> Error: Shizuku off, ative-o pra usar estas funções.")
+                "Shizuku off, ative-o pra usar estas funções."
             }
         } catch (e: Exception) {
+            log("> Error: ${e.message}")
             "Error: ${e.message}"
         }
     }
@@ -58,8 +79,11 @@ object ShellHelper {
             val output = process.inputStream.bufferedReader().use { it.readText() }
             val err = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
-            if (output.isNotEmpty()) output.trim() else err.trim()
+            val result = if (output.isNotEmpty()) output.trim() else err.trim()
+            log("> $result")
+            result
         } catch (e: Exception) {
+            log("> Error: Root execution failed.")
             "Error: Root execution failed."
         }
     }
@@ -92,3 +116,6 @@ object ShellHelper {
         return if (temp > 1000) temp / 1000f else temp
     }
 }
+
+// Mantido para compatibilidade com classes existentes
+typealias ShellHelper = ShellFunctions

@@ -106,7 +106,7 @@
     <string name="img_compact_none">No large images found.</string>
 
     <string name="kill_success">Application terminated successfully.</string>
-    <string name="kill_fail">Unable to terminate application.</string>
+    <string name="kill_fail">Não foi possível finalizar o aplicativo em segundo plano.</string>
 
     <string name="game_native_resolution">Native Resolution</string>
     <string name="game_shizuku_active">Shizuku Active</string>

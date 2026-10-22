@@ -1,26 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    [PT-BR] Manifest principal do aplicativo Hub Game Booster.
+            Define as permissões de sistema, integração com o Shizuku, declaração de visibilidade de pacotes e componentes principais.
+    [EN]    Main manifest for the Hub Game Booster application.
+            Defines system permissions, Shizuku integration, package visibility declarations, and core application components.
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+        [PT-BR] Declaração de visibilidade de pacotes (Android 11+ / API 30+). Permite consultar e interagir com a API do Shizuku diretamente.
+        [EN]    Package visibility declaration (Android 11+ / API 30+). Allows querying and interacting with the Shizuku API directly.
+    -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="moe.shizuku.manager" />
+        <package android:name="rikka.shizuku" />
+        <package android:name="rikka.shizuku.manager" />
+        <intent>
+            <action android:name="rikka.shizuku.intent.action.REQUEST_PERMISSION" />
+        </intent>
     </queries>
 
+    <!-- =================================================================== -->
+    <!-- PERMISSÕES DE SISTEMA E GERENCIAMENTO DE PROCESSOS                  -->
+    <!-- SYSTEM & PROCESS MANAGEMENT PERMISSIONS                             -->
+    <!-- =================================================================== -->
+
+    <!--
+        [PT-BR] Permite encerrar processos em segundo plano para liberar memória RAM durante a otimização.
+        [EN]    Allows killing background processes to free RAM memory during optimization.
+    -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+
+    <!--
+        [PT-BR] Permite alterar configurações seguras do sistema (ex: taxa de atualização, resolução, etc.).
+        [EN]    Allows modifying system secure settings (e.g., refresh rate, resolution, etc.).
+    -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+
+    <!--
+        [PT-BR] Permite alterar configurações de localização/idioma do dispositivo quando necessário.
+        [EN]    Allows changing device configuration/locale settings when required.
+    -->
     <uses-permission android:name="android.permission.CHANGE_CONFIGURATION" tools:ignore="ProtectedPermissions" />
+
+    <!--
+        [PT-BR] Permite monitorar estatísticas de uso de aplicativos para detectar quando um jogo é iniciado.
+        [EN]    Allows monitoring application usage statistics to detect when a game is launched.
+    -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-    <!-- Padrão moderno e atual do Shizuku -->
-    <uses-permission android:name="rikka.shizuku.permission.API" />
-    <!-- Legado (caso algum dispositivo utilize uma versão mais antiga do app gerenciador) -->
-    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
-    <!-- Necessária para inicialização e controle de processos vinculados -->
-    <uses-permission android:name="rikka.shizuku.permission.START" />
-    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" tools:ignore="ForegroundServicePermission" />
+
+    <!--
+        [PT-BR] Permite listar todos os aplicativos instalados para identificar e selecionar os jogos.
+        [EN]    Allows querying all installed applications to identify and select games.
+    -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- =================================================================== -->
+    <!-- PERMISSÕES DE INTEGRAÇÃO COM O SHIZUKU                              -->
+    <!-- SHIZUKU INTEGRATION PERMISSIONS                                     -->
+    <!-- =================================================================== -->
+
+    <!--
+        [PT-BR] Permissão padrão moderna da API do Shizuku.
+        [EN]    Modern standard permission for the Shizuku API.
+    -->
+    <uses-permission android:name="rikka.shizuku.permission.API" />
+
+    <!--
+        [PT-BR] Permissão legado para compatibilidade com versões antigas do gerenciador Shizuku.
+        [EN]    Legacy permission for compatibility with older versions of the Shizuku manager.
+    -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <!--
+        [PT-BR] Permissão necessária para inicializar e controlar processos vinculados ao Shizuku.
+        [EN]    Permission required to initialize and control processes bound to Shizuku.
+    -->
+    <uses-permission android:name="rikka.shizuku.permission.START" />
+
+    <!-- =================================================================== -->
+    <!-- PERMISSÕES DE SERVIÇO EM SEGUNDO PLANO E NOTIFICAÇÕES               -->
+    <!-- FOREGROUND SERVICE & NOTIFICATION PERMISSIONS                       -->
+    <!-- =================================================================== -->
+
+    <!--
+        [PT-BR] Permite exibir notificações persistentes com o status da otimização (Android 13+ / API 33+).
+        [EN]    Allows posting persistent notifications with optimization status (Android 13+ / API 33+).
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        [PT-BR] Permite executar serviços em primeiro plano (Foreground Service).
+        [EN]    Allows executing foreground services.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!--
+        [PT-BR] Especifica o tipo especial de serviço em primeiro plano para monitoramento de jogos.
+        [EN]    Specifies the special-use foreground service type for game monitoring.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" tools:ignore="ForegroundServicePermission" />
+
+    <!-- =================================================================== -->
+    <!-- CONFIGURAÇÃO DA APLICAÇÃO E COMPONENTES                             -->
+    <!-- APPLICATION CONFIGURATION & COMPONENTS                              -->
+    <!-- =================================================================== -->
 
     <application
         android:allowBackup="true"
@@ -31,6 +117,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
+        <!--
+            [PT-BR] Activity Principal: Ponto de entrada do usuário na interface do aplicativo.
+            [EN]    Main Activity: User entry point for the application interface.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +134,10 @@
             </intent-filter>
         </activity>
 
+        <!--
+            [PT-BR] Serviço em Primeiro Plano: Mantém a otimização e o monitoramento ativos durante a execução dos jogos.
+            [EN]    Foreground Service: Keeps optimization and monitoring active while games are running.
+        -->
         <service
             android:name=".GameForegroundService"
             android:enabled="true"

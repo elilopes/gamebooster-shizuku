@@ -52,7 +52,12 @@ class BoostSettings(
     }
 
     private fun hasPrivilege(): Boolean {
-        return ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+        val shizukuActive = ShizukuHelper.isBinderAlive.value && ShizukuHelper.hasPermission()
+        val rootActive = ShizukuHelper.isRootAvailable()
+        
+        android.util.Log.d("BoostSettings", "Verificação de privilégios - Shizuku: $shizukuActive, Root: $rootActive")
+        
+        return shizukuActive || rootActive
     }
 
     fun toggleThermalBoost(enable: Boolean) {

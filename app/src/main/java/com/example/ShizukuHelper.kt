@@ -101,23 +101,25 @@ object ShizukuHelper {
      * Em caso de erro ou ausência, registra no Log e dispara um alerta no aplicativo.
      */
     fun isShizukuAvailable(): Boolean {
-        val context = appContext
-        if (context != null) {
-            try {
-                context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
-            } catch (e: PackageManager.NameNotFoundException) {
-                val errorMsg = "Shizuku não está instalado no dispositivo."
-                Log.e("ShizukuHelper", errorMsg, e)
-                _shizukuAlert.value = errorMsg
-                onShizukuAlert?.invoke(errorMsg)
-                return false
-            } catch (e: Throwable) {
-                val errorMsg = "Erro ao verificar instalação do Shizuku: ${e.message}"
-                Log.e("ShizukuHelper", errorMsg, e)
-                _shizukuAlert.value = errorMsg
-                onShizukuAlert?.invoke(errorMsg)
-                return false
-            }
+        // Força a exigência do contexto, disparando uma exceção clara caso o initialize() não tenha sido chamado
+        val context = appContext ?: throw IllegalStateException(
+            "ShizukuHelper não foi inicializado! Chame ShizukuHelper.initialize(context) no onCreate da sua Activity."
+        )
+
+        try {
+            context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            val errorMsg = "Shizuku não está instalado no dispositivo."
+            Log.e("ShizukuHelper", errorMsg, e)
+            _shizukuAlert.value = errorMsg
+            onShizukuAlert?.invoke(errorMsg)
+            return false
+        } catch (e: Throwable) {
+            val errorMsg = "Erro ao verificar instalação do Shizuku: ${e.message}"
+            Log.e("ShizukuHelper", errorMsg, e)
+            _shizukuAlert.value = errorMsg
+            onShizukuAlert?.invoke(errorMsg)
+            return false
         }
 
         return try {

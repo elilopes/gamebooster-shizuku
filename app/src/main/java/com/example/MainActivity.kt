@@ -50,10 +50,6 @@ import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
 
-    private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, _ ->
-        ShizukuHelper.updateStatus()
-    }
-
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -67,6 +63,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         LocaleHelper.applySavedLocale(this)
         super.onCreate(savedInstanceState)
+
+        // 🛡️ OBRIGATÓRIO: Inicializa o ShizukuHelper passando o Contexto da aplicação
+        // Deve ser chamado antes de qualquer operação ou observação de estado.
+        ShizukuHelper.initialize(applicationContext)
+        
+        // ✅ Depois registre o listener adicional da Activity
         ShizukuHelper.registerPermissionListener(permissionListener)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -77,7 +79,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     MainScreen()
                 }
             }
@@ -86,12 +91,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        ShizukuHelper.updateStatus()
+        // Opcional: Atualiza o status do Shizuku toda vez que o usuário retorna ao app
+        try {
+            ShizukuHelper.updateStatus()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        ShizukuHelper.unregisterPermissionListener(permissionListener)
     }
 }
 

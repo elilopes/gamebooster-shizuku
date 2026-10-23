@@ -32,8 +32,12 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -523,8 +527,8 @@ fun ThermalMonitorTab(viewModel: GameViewModel) {
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val tempText = if (temp > 0f) String.format("Battery Temp: %.1f°C", temp) else "Battery Temp: --°C"
-                val memText = if (mem > 0f) String.format("Memory Usage: %.1f%%", mem) else "Memory Usage: --%"
+                val tempText = if (temp > 0f) String.format(java.util.Locale.US, "Battery Temp: %.1f°C", temp) else "Battery Temp: --°C"
+                val memText = if (mem > 0f) String.format(java.util.Locale.US, "Memory Usage: %.1f%%", mem) else "Memory Usage: --%"
 
                 Text(
                     text = tempText,
@@ -1716,8 +1720,7 @@ fun GameListTab(viewModel: GameViewModel) {
 fun BackgroundAppsTab(viewModel: GameViewModel) {
     val context = LocalContext.current
     val backgroundApps by viewModel.backgroundApps.collectAsState()
-    var killAlertMsg by remember { mutableStateOf<String?>(null) }
-    var blockedApps by remember { mutableStateOf(setOf<String>()) }
+    var alertMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.scanBackgroundApps()
@@ -1753,7 +1756,7 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
             Button(
                 onClick = {
                     viewModel.killAllApps { _, msg ->
-                        killAlertMsg = msg
+                        alertMsg = msg
                     }
                 },
                 modifier = Modifier
@@ -1771,32 +1774,96 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
                     .padding(vertical = 4.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = if (app.isFrozen) {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    }
                 )
             ) {
                 ListItem(
                     colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-                    headlineContent = { Text(app.name, style = MaterialTheme.typography.bodyMedium) },
-                    supportingContent = { Text("Mem: ${app.memUsage}", style = MaterialTheme.typography.bodySmall) },
+                    headlineContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = app.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (app.isFrozen) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (app.isFrozen) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "FREEZE ON",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                            if (app.isInternetBlocked) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer
+                                ) {
+                                    Text(
+                                        text = "NET BLOCKED",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    supportingContent = {
+                        Text(
+                            text = if (app.isFrozen) "Status: Congelado (Freeze ON)" else "Mem: ${app.memUsage}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Controle de Internet (Bloqueio / Liberação)
                             IconButton(onClick = {
-                                val isBlocked = blockedApps.contains(app.packageName)
-                                viewModel.toggleInternet(app.packageName, !isBlocked)
-                                blockedApps = if (isBlocked) blockedApps - app.packageName else blockedApps + app.packageName
+                                viewModel.toggleInternet(app.packageName, !app.isInternetBlocked) { _, msg ->
+                                    alertMsg = msg
+                                }
                             }) {
                                 Icon(
-                                    imageVector = if (blockedApps.contains(app.packageName)) Icons.Default.LockOpen else Icons.Default.Lock,
-                                    contentDescription = "Internet Control"
+                                    imageVector = if (app.isInternetBlocked) Icons.Default.WifiOff else Icons.Default.Wifi,
+                                    contentDescription = if (app.isInternetBlocked) "Internet Bloqueada - Clique para liberar" else "Internet Liberada - Clique para bloquear",
+                                    tint = if (app.isInternetBlocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = {
-                                viewModel.killApp(app.packageName) { _, msg ->
-                                    killAlertMsg = msg
+
+                            // Botão de Force Kill
+                            TextButton(
+                                enabled = !app.isFrozen,
+                                onClick = {
+                                    viewModel.killApp(app.packageName) { _, msg ->
+                                        alertMsg = msg
+                                    }
                                 }
-                            }) { Text(stringResource(id = R.string.btn_kill)) }
-                            TextButton(onClick = { viewModel.freezeApp(app.packageName) }) {
-                                Text(stringResource(id = R.string.btn_freeze))
+                            ) {
+                                Text(stringResource(id = R.string.btn_kill))
+                            }
+
+                            // Botão de Congelar / Descongelar
+                            IconButton(onClick = {
+                                viewModel.freezeApp(app.packageName) { _, msg ->
+                                    alertMsg = msg
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.AcUnit,
+                                    contentDescription = if (app.isFrozen) "Freeze ON - Clique para descongelar" else "Freeze OFF - Clique para congelar",
+                                    tint = if (app.isFrozen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
                             }
                         }
                     }
@@ -1805,13 +1872,13 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
         }
     }
 
-    if (killAlertMsg != null) {
+    if (alertMsg != null) {
         AlertDialog(
-            onDismissRequest = { killAlertMsg = null },
+            onDismissRequest = { alertMsg = null },
             title = { Text(stringResource(id = R.string.app_control_title)) },
-            text = { Text(killAlertMsg!!) },
+            text = { Text(alertMsg!!) },
             confirmButton = {
-                TextButton(onClick = { killAlertMsg = null }) {
+                TextButton(onClick = { alertMsg = null }) {
                     Text(stringResource(id = R.string.ok))
                 }
             }

@@ -10,7 +10,21 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
+import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * GameForegroundService
+ *
+ * [EN] Foreground service responsible for real-time background monitoring in Hub Game Booster:
+ * - Real-time device temperature and RAM usage monitoring
+ * - Active ad blocking statistics tracking
+ * - Persistent Android notification with quick controls and status display
+ *
+ * [PT] Serviço de primeiro plano responsável pelo monitoramento contínuo em segundo plano no Hub Game Booster:
+ * - Monitoramento em tempo real da temperatura do dispositivo e uso de memória RAM
+ * - Rastreamento e estatísticas de bloqueio de anúncios ativo
+ * - Notificação persistente no Android com estatísticas e controles rápidos
+ */
 class GameForegroundService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -23,10 +37,28 @@ class GameForegroundService : Service() {
         const val ACTION_STOP_THERMAL = "com.gfx.ACTION_STOP_THERMAL"
         const val ACTION_STOP_ADBLOCK = "com.gfx.ACTION_STOP_ADBLOCK"
 
+        /**
+         * [EN] Flag indicating if real-time thermal/temperature monitoring is active.
+         * [PT] Flag que indica se o monitoramento térmico/temperatura em tempo real está ativo.
+         */
         var thermalMonitoringActive = false
+
+        /**
+         * [EN] Flag indicating if real-time ad blocker monitoring is active.
+         * [PT] Flag que indica se o monitoramento do bloqueador de anúncios em tempo real está ativo.
+         */
         var adBlockerRealtimeActive = false
+
+        /**
+         * [EN] Total count of blocked ads during the active session.
+         * [PT] Contagem total de anúncios bloqueados durante a sessão ativa.
+         */
         var blockedAdsCount = 0
 
+        /**
+         * [EN] Starts the foreground monitoring service safely across Android SDK versions.
+         * [PT] Inicia o serviço de monitoramento em primeiro plano com segurança em diferentes versões do Android SDK.
+         */
         fun startService(context: Context) {
             val intent = Intent(context, GameForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -36,6 +68,10 @@ class GameForegroundService : Service() {
             }
         }
 
+        /**
+         * [EN] Stops the foreground monitoring service.
+         * [PT] Interrompe o serviço de monitoramento em primeiro plano.
+         */
         fun stopService(context: Context) {
             val intent = Intent(context, GameForegroundService::class.java)
             context.stopService(intent)
@@ -49,6 +85,10 @@ class GameForegroundService : Service() {
         createNotificationChannel()
     }
 
+    /**
+     * [EN] Handles service command intents and updates active monitoring states.
+     * [PT] Processa intents de comandos do serviço e atualiza os estados de monitoramento ativos.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action != null) {
             when (intent.action) {
@@ -80,6 +120,10 @@ class GameForegroundService : Service() {
         return START_STICKY
     }
 
+    /**
+     * [EN] Coroutine monitoring loop that periodically checks metrics and updates the ongoing notification.
+     * [PT] Loop de corrotina de monitoramento que checa métricas e atualiza a notificação em andamento ciclicamente.
+     */
     private fun startMonitoringLoop() {
         serviceScope.launch {
             while (isRunning && (thermalMonitoringActive || adBlockerRealtimeActive)) {
@@ -91,12 +135,16 @@ class GameForegroundService : Service() {
                 }
 
                 updateNotification(temp, memUsage, blockedAdsCount)
-                delay(3000)
+                delay(3000.milliseconds)
             }
             stopSelf()
         }
     }
 
+    /**
+     * [EN] Calculates current system memory usage percentage.
+     * [PT] Calcula a porcentagem de uso atual de memória do sistema.
+     */
     private fun getMemoryUsagePercentage(): Float {
         return try {
             val runtime = Runtime.getRuntime()
@@ -108,6 +156,10 @@ class GameForegroundService : Service() {
         }
     }
 
+    /**
+     * [EN] Creates the notification channel for Android O (API level 26) and above.
+     * [PT] Cria o canal de notificação para Android O (API nível 26) e superior.
+     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -122,6 +174,10 @@ class GameForegroundService : Service() {
         }
     }
 
+    /**
+     * [EN] Builds and posts the persistent foreground notification with live stats.
+     * [PT] Constrói e exibe a notificação persistente em primeiro plano com estatísticas ao vivo.
+     */
     private fun updateNotification(temp: Float, memUsage: Float, blockedAds: Int) {
         val stopIntent = Intent(this, GameForegroundService::class.java).apply {
             action = ACTION_STOP_ALL
@@ -133,7 +189,7 @@ class GameForegroundService : Service() {
 
         val contentText = buildString {
             if (thermalMonitoringActive) {
-                append(String.format("Temp: %.1f°C | Mem: %.1f%%", temp, memUsage))
+                append(String.format(java.util.Locale.US, "Temp: %.1f°C | Mem: %.1f%%", temp, memUsage))
             }
             if (thermalMonitoringActive && adBlockerRealtimeActive) {
                 append(" | ")

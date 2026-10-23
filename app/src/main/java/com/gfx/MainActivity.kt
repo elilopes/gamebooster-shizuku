@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -2069,8 +2070,17 @@ fun SettingItem(
 @Composable
 fun ScriptsTab(viewModel: GameViewModel) {
     var scriptContent by remember { mutableStateOf("# Exemplo de Script / Game Tuner Shell\n# wm size 720x1280\n# settings put global animator_duration_scale 0.0") }
-    var executionOutput by remember { mutableStateOf<String?>(null) }
     var isRunning by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val commandLog by ShellFunctions.commandLog.collectAsState()
+    val scrollState = androidx.compose.foundation.rememberScrollState()
+
+    LaunchedEffect(commandLog.size) {
+        if (commandLog.isNotEmpty()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
         Text(
@@ -2088,10 +2098,10 @@ fun ScriptsTab(viewModel: GameViewModel) {
         OutlinedTextField(
             value = scriptContent,
             onValueChange = { scriptContent = it },
-            label = { Text("Script (.sh)") },
+            label = { Text(stringResource(id = R.string.scripts_input_label)) },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp),
+                .height(160.dp),
             textStyle = MaterialTheme.typography.bodySmall
         )
 
@@ -2101,8 +2111,7 @@ fun ScriptsTab(viewModel: GameViewModel) {
             onClick = {
                 if (scriptContent.isNotBlank()) {
                     isRunning = true
-                    viewModel.runCustomScript(scriptContent) { out ->
-                        executionOutput = out
+                    viewModel.runCustomScript(scriptContent) { _ ->
                         isRunning = false
                     }
                 }
@@ -2110,31 +2119,118 @@ fun ScriptsTab(viewModel: GameViewModel) {
             modifier = Modifier.fillMaxWidth(),
             enabled = !isRunning
         ) {
-            Text(stringResource(id = R.string.scripts_run_btn))
-        }
-
-        val commandLog by ShellFunctions.commandLog.collectAsState()
-        val scrollState = androidx.compose.foundation.rememberScrollState()
-        
-        LaunchedEffect(commandLog) {
-            scrollState.scrollTo(scrollState.maxValue)
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                if (isRunning) stringResource(id = R.string.scripts_running)
+                else stringResource(id = R.string.scripts_run_btn)
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black)
-                    .padding(8.dp)
-                    .verticalScroll(scrollState)
-            ) {
-                Text(
-                    text = commandLog.joinToString("\n"),
-                    color = androidx.compose.ui.graphics.Color.Green,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall
-                )
+
+        // Card do Terminal com Barra de Ações (Copiar e Limpar)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = androidx.compose.ui.graphics.Color(0xFF1E1E1E)
+            )
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Barra de cabeçalho do console
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(androidx.compose.ui.graphics.Color(0xFF2D2D2D))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.scripts_terminal_title),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = androidx.compose.ui.graphics.Color.LightGray
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Botão de Copiar Logs do Terminal
+                        IconButton(
+                            onClick = {
+                                if (commandLog.isNotEmpty()) {
+                                    val fullLog = commandLog.joinToString("\n")
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(fullLog))
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.scripts_copied_toast),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.scripts_empty_toast),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = stringResource(id = R.string.scripts_copy_btn),
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Botão de Limpar Terminal
+                        IconButton(
+                            onClick = {
+                                ShellFunctions.clearLog()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(id = R.string.scripts_clear_btn),
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Conteúdo do Terminal
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Color.Black)
+                        .padding(10.dp)
+                        .verticalScroll(scrollState)
+                ) {
+                    if (commandLog.isEmpty()) {
+                        Text(
+                            text = "# " + stringResource(id = R.string.scripts_empty_toast),
+                            color = androidx.compose.ui.graphics.Color.DarkGray,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        Text(
+                            text = commandLog.joinToString("\n"),
+                            color = androidx.compose.ui.graphics.Color(0xFF00FF66),
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
         }
     }

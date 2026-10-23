@@ -11,9 +11,15 @@ object ShellFunctions {
     private val _commandLog = MutableStateFlow<List<String>>(emptyList())
     val commandLog: StateFlow<List<String>> = _commandLog.asStateFlow()
 
-    private fun log(message: String) {
+    fun log(message: String) {
         runBlocking(Dispatchers.Default) {
             _commandLog.value = _commandLog.value + message
+        }
+    }
+
+    fun clearLog() {
+        runBlocking(Dispatchers.Default) {
+            _commandLog.value = emptyList()
         }
     }
 
@@ -26,11 +32,13 @@ object ShellFunctions {
             val error = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
             val result = if (output.isNotEmpty()) output.trim() else error.trim()
-            log("> $result")
+            if (result.isNotEmpty()) {
+                log("> $result")
+            }
             result
         } catch (e: Exception) {
             e.printStackTrace()
-            log("> Error: ${e.message}")
+            log("> Error: [$command] ${e.message}")
             ""
         }
     }
@@ -50,11 +58,13 @@ object ShellFunctions {
                     if (ShizukuHelper.isRootAvailable()) {
                         executeRoot(command)
                     } else {
-                        log("> Error: Shizuku falhou ao executar o comando.")
-                        "Error: Shizuku falhou ao executar o comando."
+                        log("> Error: [$command] Shizuku falhou ao executar o comando.")
+                        "Error: [$command] Shizuku falhou ao executar o comando."
                     }
                 } else {
-                    log("> $out")
+                    if (out.isNotEmpty()) {
+                        log("> $out")
+                    }
                     out
                 }
             } 
@@ -64,12 +74,12 @@ object ShellFunctions {
             } 
             // 3. SE NENHUM DOS DOIS ESTIVER ATIVO: Bloqueia e impede o shell comum!
             else {
-                log("> Error: Shizuku off, ative-o pra usar estas funções.")
+                log("> Error: [$command] Shizuku off, ative-o pra usar estas funções.")
                 "Shizuku off, ative-o pra usar estas funções."
             }
         } catch (e: Exception) {
-            log("> Error: ${e.message}")
-            "Error: ${e.message}"
+            log("> Error: [$command] ${e.message}")
+            "Error: [$command] ${e.message}"
         }
     }
 
@@ -80,18 +90,20 @@ object ShellFunctions {
             val err = process.errorStream.bufferedReader().use { it.readText() }
             process.waitFor()
             val result = if (output.isNotEmpty()) output.trim() else err.trim()
-            log("> $result")
+            if (result.isNotEmpty()) {
+                log("> $result")
+            }
             result
         } catch (e: Exception) {
-            log("> Error: Root execution failed.")
-            "Error: Root execution failed."
+            log("> Error: [$command] Root execution failed.")
+            "Error: [$command] Root execution failed."
         }
     }
 
     fun getNativeResolution(): String {
-        var output = execute("wm size")
-        if (output.isEmpty() || !output.contains("size")) {
-            output = executePrivileged("wm size")
+        val output = executePrivileged("wm size")
+        if (output.contains("Shizuku off") || output.contains("Error") || output.contains("falhou")) {
+            return "Shizuku off, ative-o pra usar estas funções."
         }
         return output.substringAfter("Physical size: ").ifEmpty { 
             output.substringAfter("Override size: ").ifEmpty { "1080x1920" } 

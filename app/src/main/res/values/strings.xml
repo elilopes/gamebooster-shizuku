@@ -52,7 +52,14 @@
     <string name="scripts_tab_title">Custom Shell Scripts (.sh)</string>
     <string name="scripts_tab_desc">Execute custom shell scripts or Game Tuner scripts with Shizuku privileges:</string>
     <string name="scripts_run_btn">Run Script</string>
+    <string name="scripts_running">Running…</string>
     <string name="scripts_output_label">Execution Output:</string>
+    <string name="scripts_input_label">Script (.sh)</string>
+    <string name="scripts_terminal_title">Terminal Console</string>
+    <string name="scripts_copy_btn">Copy</string>
+    <string name="scripts_clear_btn">Clear</string>
+    <string name="scripts_copied_toast">Log copied to clipboard!</string>
+    <string name="scripts_empty_toast">Terminal is empty.</string>
     <string name="menu_enable_thermal">Enable Thermal monitor</string>
     <string name="menu_disable_thermal">Disable Thermal monitor</string>
     <string name="thermal_monitor_warning">Optional feature: Active polling is running. You can disable this tab from the menu anytime to save RAM and CPU resources.</string>

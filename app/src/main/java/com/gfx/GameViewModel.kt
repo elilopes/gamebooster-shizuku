@@ -49,9 +49,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db").build()
     private val boostPrefs = application.getSharedPreferences("boost_settings_prefs", Context.MODE_PRIVATE)
     private val manualGamesPrefs = application.getSharedPreferences("manual_games_prefs", Context.MODE_PRIVATE)
+
+    private val systemExcludePackages = setOf(
+        "com.android.settings",
+        "com.android.stk",
+        "com.android.systemui",
+        "com.google.android.packageinstaller",
+        "com.android.packageinstaller",
+        "com.google.android.googlequicksearchbox",
+        application.packageName
+    )
     
     val boostSettings = BoostSettings(application, viewModelScope, getBackgroundApps = { _backgroundApps.value })
-    val managerApps = ManagerApps(application, packageManager, viewModelScope, onRefreshRequested = { scanBackgroundApps() })
+    val appsBackground = AppsBackground(application, packageManager, viewModelScope, onRefreshRequested = { scanBackgroundApps() })
+    val managerApps: AppsBackground get() = appsBackground
+    val backupApp = BackupApp(application, viewModelScope)
 
     private val _games = MutableStateFlow<List<GameApp>>(emptyList())
     val games: StateFlow<List<GameApp>> = _games
@@ -86,7 +98,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val inspectedImage = MutableStateFlow<ImageOptimizerHelper.ImageInfo?>(null)
     val compressedImageFile = MutableStateFlow<File?>(null)
 
-    val nativeResolution = ShellFunctions.getNativeResolution()
+    val nativeResolution: String
+        get() = ShellFunctions.getNativeResolution()
 
     init {
         loadGames()
@@ -168,16 +181,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             e.printStackTrace()
         }
     }
-
-    private val systemExcludePackages = setOf(
-        "com.android.settings",
-        "com.android.stk",
-        "com.android.systemui",
-        "com.google.android.packageinstaller",
-        "com.android.packageinstaller",
-        "com.google.android.googlequicksearchbox",
-        app.packageName
-    )
 
     fun isGameApp(appInfo: ApplicationInfo, pkgName: String): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -354,71 +357,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun backupApp(packageName: String, includeApk: Boolean, includeObb: Boolean, includeData: Boolean, compressZip: Boolean, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                if (!ShizukuHelper.hasPermission()) {
-                    withContext(Dispatchers.Main) { onResult(false, "Shizuku permission required for backup.") }
-                    return@launch
-                }
-                val backupDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "GameBoosterBackups")
-                if (!backupDir.exists()) backupDir.mkdirs()
-
-                val timestamp = System.currentTimeMillis()
-                val targetFolder = File(backupDir, "${packageName}_$timestamp")
-                targetFolder.mkdirs()
-
-                val commands = mutableListOf<String>()
-
-                if (includeApk) {
-                    val apkPathCmd = "pm path $packageName"
-                    val apkPathOut = ShizukuHelper.executeCommand(apkPathCmd).trim()
-                    val paths = apkPathOut.lines().map { it.removePrefix("package:").trim() }.filter { it.isNotEmpty() }
-                    for ((index, path) in paths.withIndex()) {
-                        val destName = if (paths.size == 1) "base.apk" else "base_$index.apk"
-                        commands.add("cp \"$path\" \"${targetFolder.absolutePath}/$destName\"")
-                    }
-                }
-
-                if (includeObb) {
-                    val obbDir = File("/sdcard/Android/obb/$packageName")
-                    if (obbDir.exists()) {
-                        commands.add("cp -r \"${obbDir.absolutePath}\" \"${targetFolder.absolutePath}/obb\"")
-                    }
-                }
-
-                if (includeData) {
-                    val sdDataDir = File("/sdcard/Android/data/$packageName")
-                    if (sdDataDir.exists()) {
-                        commands.add("cp -r \"${sdDataDir.absolutePath}\" \"${targetFolder.absolutePath}/data\"")
-                    }
-                    val internalDataDir = File("/data/data/$packageName")
-                    if (internalDataDir.exists()) {
-                        commands.add("cp -r \"${internalDataDir.absolutePath}\" \"${targetFolder.absolutePath}/internal_data\"")
-                    }
-                }
-
-                for (cmd in commands) {
-                    ShizukuHelper.executeCommand(cmd)
-                }
-
-                var finalPath = targetFolder.absolutePath
-                if (compressZip) {
-                    val zipFile = File(backupDir, "${packageName}_$timestamp.zip")
-                    val zipCmd = "cd \"${targetFolder.absolutePath}\" && zip -r \"${zipFile.absolutePath}\" ."
-                    ShizukuHelper.executeCommand(zipCmd)
-                    targetFolder.deleteRecursively()
-                    finalPath = zipFile.absolutePath
-                }
-
-                withContext(Dispatchers.Main) {
-                    onResult(true, "Backup saved to: $finalPath")
-                }
-            } catch (e: Throwable) {
-                withContext(Dispatchers.Main) {
-                    onResult(false, "Backup failed: ${e.message}")
-                }
-            }
-        }
+        backupApp.backupApp(packageName, includeApk, includeObb, includeData, compressZip, onResult)
     }
 
     fun cleanGameCache(packageName: String, onResult: (Boolean, String) -> Unit) {
@@ -440,17 +379,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun moveObbToSd(packageName: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val source = "/sdcard/Android/obb/$packageName"
-                val target = "/sdcard/Android/obb/Archive/$packageName"
-                ShizukuHelper.executeCommand("mkdir -p /sdcard/Android/obb/Archive")
-                ShizukuHelper.executeCommand("mv $source $target")
-                withContext(Dispatchers.Main) { onResult(true, "OBB moved successfully.") }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { onResult(false, "Move failed: ${e.message}") }
-            }
-        }
+        backupApp.moveObbToSd(packageName, onResult)
     }
 
     fun increaseVirtualMemory(sizeMb: Int, onResult: (Boolean, String) -> Unit) {
@@ -469,103 +398,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
 
     fun scanBackgroundApps() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = mutableListOf<BackgroundApp>()
-            val seenPackages = mutableSetOf<String>()
-            val activityManager = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-
-            // 1. Tentar detectar processos reais usando Shizuku ou Root via ps
-            val psOutput = ShellFunctions.executePrivileged("ps -A -o PID,NAME,RSS")
-            if (psOutput.isNotEmpty() && !psOutput.startsWith("Error")) {
-                val lines = psOutput.lines()
-                for (line in lines) {
-                    val tokens = line.trim().split("\\s+".toRegex())
-                    for (token in tokens) {
-                        if (token.contains(".") && !token.startsWith("/") && !token.startsWith("[") && !token.endsWith("]")) {
-                            val pkg = token.substringBefore(":")
-                            if (pkg != app.packageName && !seenPackages.contains(pkg) && !systemExcludePackages.contains(pkg)) {
-                                try {
-                                    val appInfo = packageManager.getApplicationInfo(pkg, 0)
-                                    val label = appInfo.loadLabel(packageManager).toString()
-                                    val memKb = tokens.firstOrNull { it.all { c -> c.isDigit() } && it.length in 3..9 }?.toLongOrNull() ?: 125000L
-                                    val memMb = "${(memKb / 1024).coerceAtLeast(18)}MB"
-                                    list.add(BackgroundApp(pkg, label, memMb))
-                                    seenPackages.add(pkg)
-                                } catch (e: Exception) {
-                                    // ignore non-installed package token
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. Coletar processos ativos via ActivityManager
-            try {
-                val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
-                for (proc in runningProcesses) {
-                    for (pkg in proc.pkgList) {
-                        if (pkg != app.packageName && !seenPackages.contains(pkg) && !systemExcludePackages.contains(pkg)) {
-                            try {
-                                val appInfo = packageManager.getApplicationInfo(pkg, 0)
-                                val label = appInfo.loadLabel(packageManager).toString()
-                                val memInfo = activityManager.getProcessMemoryInfo(intArrayOf(proc.pid))
-                                val totalPss = if (memInfo.isNotEmpty()) memInfo[0].totalPss / 1024 else 75
-                                val memMb = "${totalPss.coerceAtLeast(15)}MB"
-                                list.add(BackgroundApp(pkg, label, memMb))
-                                seenPackages.add(pkg)
-                            } catch (e: Exception) {
-                                // ignore
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // 3. Fallback dinâmico: listar apps de terceiros instalados se houver poucos processos visíveis
-            if (list.size < 4) {
-                try {
-                    val installedApps = packageManager.getInstalledApplications(0)
-                    for (appInfo in installedApps) {
-                        val pkg = appInfo.packageName
-                        if (pkg == app.packageName || systemExcludePackages.contains(pkg) || seenPackages.contains(pkg)) continue
-                        val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-                        if (isUserApp) {
-                            val label = appInfo.loadLabel(packageManager).toString()
-                            val seed = Math.abs(pkg.hashCode() % 280) + 40
-                            list.add(BackgroundApp(pkg, label, "${seed}MB"))
-                            seenPackages.add(pkg)
-                            if (list.size >= 15) break
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-
+        viewModelScope.launch {
+            val list = appsBackground.checkBackgroundApps(systemExcludePackages)
             withContext(Dispatchers.Main) {
-                _backgroundApps.value = list.distinctBy { it.packageName }
+                _backgroundApps.value = list
             }
         }
     }
 
-    // Funções de gerenciamento de aplicativos delegadas para o novo arquivo ManagerApps
+    // Funções de gerenciamento de aplicativos em segundo plano (AppsBackground)
     fun killApp(packageName: String, onResult: ((Boolean, String) -> Unit)? = null): Boolean {
-        return managerApps.killApp(packageName, onResult)
+        return appsBackground.killApp(packageName, onResult)
     }
 
     fun killAllApps(onResult: ((Int, String) -> Unit)? = null) {
-        managerApps.killAllApps(_backgroundApps.value, onResult)
+        appsBackground.killAllApps(_backgroundApps.value, onResult)
     }
 
     fun toggleInternet(packageName: String, block: Boolean) {
-        managerApps.toggleInternet(packageName, block)
+        appsBackground.toggleInternet(packageName, block)
     }
 
     fun freezeApp(packageName: String, onResult: ((Boolean, String) -> Unit)? = null): Boolean {
-        return managerApps.freezeApp(packageName, onResult)
+        return appsBackground.freezeApp(packageName, onResult)
     }
 
     fun toggleAdBlocker(enable: Boolean) {
@@ -809,7 +664,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
 
     fun getNativeDensity(): Int {
-        val out = ShellFunctions.execute("wm density").trim()
+        if (!ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+            return 420
+        }
+        val out = ShellFunctions.executePrivileged("wm density").trim()
         // e.g. "Physical density: 420" or "420"
         val digits = out.filter { it.isDigit() }
         return digits.toIntOrNull() ?: 420

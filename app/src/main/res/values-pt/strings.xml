@@ -209,4 +209,6 @@
     <string name="logs_copy">Copiar</string>
     <string name="logs_copied_toast">Logs copiados para a área de transferência!</string>
     <string name="logs_close">Fechar</string>
+    <string name="menu_exit">Sair</string>
+    <string name="exit_label">Sair</string>
 </resources>

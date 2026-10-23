@@ -3,6 +3,7 @@ package com.gfx
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.widget.Toast
 import android.net.Uri
@@ -79,6 +80,8 @@ class MainActivity : ComponentActivity() {
         */
         ShizukuHelper.initialize(applicationContext)
 
+        preventAppKillInBackground()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -109,6 +112,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+    }
+
+    private fun preventAppKillInBackground() {
+        try {
+            GameForegroundService.startService(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                val pkgName = packageName
+                if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(pkgName)) {
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$pkgName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            android.util.Log.d("AppKeepAlive", "Serviço de permanência em segundo plano acionado com sucesso.")
+        } catch (e: Exception) {
+            android.util.Log.e("AppKeepAlive", "Erro ao configurar permanência em segundo plano: ${e.message}")
+        }
     }
 }
 
@@ -185,6 +212,35 @@ fun SystemStatusBadge() {
     }
 }
 
+@Composable
+fun ExitBadge() {
+    val context = LocalContext.current
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.clickable {
+            exitApp(context)
+        }
+    ) {
+        Text(
+            text = stringResource(id = R.string.exit_label),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.onErrorContainer
+        )
+    }
+}
+
+fun exitApp(context: Context) {
+    try {
+        GameForegroundService.stopService(context)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    (context as? Activity)?.finishAffinity()
+    kotlin.system.exitProcess(0)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: GameViewModel = viewModel()) {
@@ -257,6 +313,8 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             },
             actions = {
                 SystemStatusBadge()
+                Spacer(modifier = Modifier.width(6.dp))
+                ExitBadge()
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Menu")
@@ -304,6 +362,13 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                         text = { Text(stringResource(id = R.string.menu_about)) },
                         onClick = {
                             showAbout = true
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.menu_exit)) },
+                        onClick = {
+                            exitApp(context)
                             showMenu = false
                         }
                     )

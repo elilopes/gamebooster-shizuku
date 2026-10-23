@@ -209,4 +209,6 @@
     <string name="logs_copy">Copy</string>
     <string name="logs_copied_toast">Logs copied to clipboard!</string>
     <string name="logs_close">Close</string>
+    <string name="menu_exit">Exit</string>
+    <string name="exit_label">Exit</string>
 </resources>

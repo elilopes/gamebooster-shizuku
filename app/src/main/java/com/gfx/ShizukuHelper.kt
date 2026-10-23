@@ -280,15 +280,18 @@ object ShizukuHelper {
             if (available) {
                 val successMsg = "Shizuku ativado e respondendo com sucesso (pingBinder OK)."
                 Log.d("ShizukuHelper", successMsg)
+                addLog("Shizuku ativado e respondendo com sucesso (pingBinder OK).")
                 dispatchSuccess(successMsg)
                 return true
             }
         } catch (e: Throwable) {
             Log.d("ShizukuHelper", "Shizuku.pingBinder() indisponível na primeira tentativa: ${e.message}")
+            addLog("Shizuku indisponível na primeira tentativa (pingBinder com falha): ${e.message}.")
         }
 
         // 2. Se falhou, aciona o Fallback de Recuperação Automática
-        Log.w("ShizukuHelper", "Shizuku indisponível. Tentando recuperação automática do serviço...")
+        Log.w("ShizukuHelper", "Shizuku indisponível, tentando recuperação automática do serviço...")
+        addLog("Shizuku indisponível, tentando recuperação automática do serviço")
         
         val ctx = appContext
         if (ctx != null) {
@@ -298,6 +301,7 @@ object ShizukuHelper {
                     // Tenta iniciar o serviço de forma automática (via root ou script local)
                     val bootResult = startShizukuService(ctx)
                     Log.d("ShizukuHelper", "Resultado da recuperação automática: $bootResult")
+                    addLog("Resultado da recuperação automática... $bootResult")
 
                     // Aguarda uma fração de segundo para o binder subir e testa novamente
                     Thread.sleep(500)
@@ -306,15 +310,18 @@ object ShizukuHelper {
                     if (retryAvailable) {
                         val recoverySuccessMsg = "Shizuku recuperado e ativado com sucesso via fallback automático!"
                         Log.d("ShizukuHelper", recoverySuccessMsg)
+                        addLog("Shizuku recuperado e ativado com sucesso via fallback automático!")
                         dispatchSuccess(recoverySuccessMsg)
                         return true
                     }
                 } catch (recoveryEx: Throwable) {
                     Log.e("ShizukuHelper", "Falha durante o processo de recuperação automática: ${recoveryEx.message}", recoveryEx)
+                    addLog("Falha durante o processo de recuperação automática: ${recoveryEx.message}.")
                 }
             } else {
                 val installError = "Impossível recuperar: o aplicativo Shizuku não está instalado."
                 Log.e("ShizukuHelper", installError)
+                addLog("Impossível recuperar: o aplicativo Shizuku não está instalado.")
                 dispatchAlert(installError)
                 return false
             }
@@ -518,7 +525,7 @@ object ShizukuHelper {
 
             if (!executed) {
                 openShizukuApp(context)
-                "Aplicativo Shizuku aberto. Certifique-se de iniciar o serviço no aplicativo Shizuku ou via Depuração por Wi-Fi."
+                "Aplicativo Shizuku foi aberto, inicie o serviço deste aplicativo ou via Depuração por Wi-Fi ou USB."
             } else {
                 updateStatus()
                 outputResult.ifEmpty { "Comando de inicialização enviado ao Shizuku." }

@@ -41,8 +41,8 @@ class AppsBackground(
      * [PT] Obtém o conjunto de nomes de pacotes atualmente salvos como congelados.
      */
     fun getFrozenApps(): Set<String> {
-        val set = prefs.getStringSet("frozen_apps", emptySet()) ?: emptySet()
-        return set.toSet()
+        val set = prefs.getStringSet("frozen_apps", null) ?: return emptySet()
+        return set.filterNotNull().toSet()
     }
 
     /**
@@ -50,7 +50,8 @@ class AppsBackground(
      * [PT] Verifica se o pacote do aplicativo especificado está congelado ou desativado.
      */
     fun isAppFrozen(packageName: String): Boolean {
-        if (getFrozenApps().contains(packageName)) return true
+        val frozenSet = getFrozenApps()
+        if (frozenSet.isNotEmpty() && frozenSet.contains(packageName)) return true
         return try {
             val setting = packageManager.getApplicationEnabledSetting(packageName)
             setting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
@@ -75,8 +76,8 @@ class AppsBackground(
      * [PT] Obtém o conjunto de nomes de pacotes cujo acesso à internet está bloqueado.
      */
     fun getBlockedInternetApps(): Set<String> {
-        val set = prefs.getStringSet("blocked_internet_apps", emptySet()) ?: emptySet()
-        return set.toSet()
+        val set = prefs.getStringSet("blocked_internet_apps", null) ?: return emptySet()
+        return set.filterNotNull().toSet()
     }
 
     /**
@@ -84,7 +85,8 @@ class AppsBackground(
      * [PT] Verifica se o acesso à internet está bloqueado para o pacote especificado.
      */
     fun isInternetBlocked(packageName: String): Boolean {
-        return getBlockedInternetApps().contains(packageName)
+        val blockedSet = getBlockedInternetApps()
+        return blockedSet.isNotEmpty() && blockedSet.contains(packageName)
     }
 
     /**
@@ -141,9 +143,9 @@ class AppsBackground(
      * apps congelados/bloqueados salvos e fallback de aplicativos instalados.
      */
     suspend fun checkBackgroundApps(
-        excludePackages: Set<String>? = emptySet()
+        excludePackages: Set<String>? = null
     ): List<BackgroundApp> = withContext(Dispatchers.IO) {
-        val safeExclude = excludePackages ?: emptySet()
+        val safeExclude = excludePackages?.filterNotNull()?.toSet() ?: emptySet()
         val list = mutableListOf<BackgroundApp>()
         val seenPackages = mutableSetOf<String>()
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager

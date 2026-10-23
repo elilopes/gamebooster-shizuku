@@ -232,4 +232,79 @@ class BackupApp(
             }
         }
     }
+
+    /**
+     * Restaura seletivamente partes específicas de um backup (APK, OBB, Data)
+     */
+    fun restoreSpecific(backupFile: File, packageName: String, restoreApk: Boolean, restoreObb: Boolean, restoreData: Boolean, onResult: (Boolean, String) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                if (!hasPriv) {
+                    withContext(Dispatchers.Main) {
+                        onResult(false, "Permissão Shizuku ou Root necessária para restauração.")
+                    }
+                    return@launch
+                }
+
+                if (!backupFile.exists()) {
+                    withContext(Dispatchers.Main) {
+                        onResult(false, "Arquivo de backup não encontrado.")
+                    }
+                    return@launch
+                }
+
+                val tempExtract = File(context.cacheDir, "restore_${System.currentTimeMillis()}")
+                tempExtract.mkdirs()
+
+                if (backupFile.name.endsWith(".zip")) {
+                    ShellFunctions.executePrivileged("unzip -q -o \"${backupFile.absolutePath}\" -d \"${tempExtract.absolutePath}\"")
+                } else if (backupFile.isDirectory) {
+                    ShellFunctions.executePrivileged("cp -r \"${backupFile.absolutePath}/.\" \"${tempExtract.absolutePath}/\"")
+                }
+
+                if (restoreApk) {
+                    val apks = tempExtract.listFiles { f -> f.name.endsWith(".apk") } ?: emptyArray()
+                    if (apks.isNotEmpty()) {
+                        if (apks.size == 1) {
+                            ShellFunctions.executePrivileged("pm install -r \"${apks[0].absolutePath}\"")
+                        } else {
+                            val allApkPaths = apks.joinToString(" ") { "\"${it.absolutePath}\"" }
+                            ShellFunctions.executePrivileged("pm install-multiple -r $allApkPaths")
+                        }
+                    }
+                }
+
+                if (restoreObb) {
+                    val obbFolder = File(tempExtract, "obb")
+                    if (obbFolder.exists()) {
+                        ShellFunctions.executePrivileged("mkdir -p /sdcard/Android/obb/$packageName")
+                        ShellFunctions.executePrivileged("cp -r \"${obbFolder.absolutePath}/.\" \"/sdcard/Android/obb/$packageName/\"")
+                    }
+                }
+
+                if (restoreData) {
+                    val dataFolder = File(tempExtract, "data")
+                    if (dataFolder.exists()) {
+                        ShellFunctions.executePrivileged("mkdir -p /sdcard/Android/data/$packageName")
+                        ShellFunctions.executePrivileged("cp -r \"${dataFolder.absolutePath}/.\" \"/sdcard/Android/data/$packageName/\"")
+                    }
+                    val internalDataFolder = File(tempExtract, "internal_data")
+                    if (internalDataFolder.exists()) {
+                        ShellFunctions.executePrivileged("cp -r \"${internalDataFolder.absolutePath}/.\" \"/data/data/$packageName/\"")
+                    }
+                }
+
+                tempExtract.deleteRecursively()
+
+                withContext(Dispatchers.Main) {
+                    onResult(true, "Restauração concluída com sucesso!")
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult(false, "Erro ao restaurar: ${e.message}")
+                }
+            }
+        }
+    }
 }

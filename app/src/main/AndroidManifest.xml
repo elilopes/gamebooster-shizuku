@@ -28,6 +28,13 @@
     <!-- =================================================================== -->
 
     <!--
+        [PT-BR] Permite acesso à internet para checagem automatizada de atualizações dos jogos em repositórios abertos (APKPure, F-Droid, etc.).
+        [EN]    Allows internet access for automated game update checks across open repositories.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
         [PT-BR] Permite encerrar processos em segundo plano para liberar memória RAM durante a otimização.
         [EN]    Allows killing background processes to free RAM memory during optimization.
     -->

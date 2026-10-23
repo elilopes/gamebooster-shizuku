@@ -32,7 +32,9 @@ data class GameApp(
 data class BackgroundApp(
     val packageName: String,
     val name: String,
-    val memUsage: String
+    val memUsage: String,
+    val isFrozen: Boolean = false,
+    val isInternetBlocked: Boolean = false
 )
 
 data class AppItemInfo(
@@ -356,6 +358,52 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val updateCheckResults = MutableStateFlow<Map<String, WebUpdateInfo>>(emptyMap())
+    val isCheckingAllUpdates = MutableStateFlow(false)
+
+    fun checkUpdateForGame(game: GameApp) {
+        viewModelScope.launch(Dispatchers.IO) {
+            updateCheckResults.value = updateCheckResults.value + (game.packageName to WebUpdateInfo(
+                packageName = game.packageName,
+                installedVersion = game.versionName,
+                status = UpdateBadgeStatus.CHECKING
+            ))
+            val result = WebUpdateChecker.checkUpdate(game.packageName, game.versionName)
+            updateCheckResults.value = updateCheckResults.value + (game.packageName to result)
+        }
+    }
+
+    fun checkAllGameUpdates() {
+        viewModelScope.launch(Dispatchers.IO) {
+            isCheckingAllUpdates.value = true
+            val currentGames = _games.value
+            val initial = updateCheckResults.value.toMutableMap()
+            for (game in currentGames) {
+                initial[game.packageName] = WebUpdateInfo(
+                    packageName = game.packageName,
+                    installedVersion = game.versionName,
+                    status = UpdateBadgeStatus.CHECKING
+                )
+            }
+            updateCheckResults.value = initial
+
+            for (game in currentGames) {
+                val res = WebUpdateChecker.checkUpdate(game.packageName, game.versionName)
+                updateCheckResults.value = updateCheckResults.value + (game.packageName to res)
+            }
+            isCheckingAllUpdates.value = false
+        }
+    }
+
+    fun openUpdateUrl(url: String) {
+        WebUpdateChecker.openUrl(app, url)
+    }
+
+    fun searchGameOnWeb(packageName: String) {
+        val searchUrl = "https://www.apkmirror.com/?post_type=app_release&searchtype=apk&s=" + java.net.URLEncoder.encode(packageName, "UTF-8")
+        WebUpdateChecker.openUrl(app, searchUrl)
+    }
+
     fun backupApp(packageName: String, includeApk: Boolean, includeObb: Boolean, includeData: Boolean, compressZip: Boolean, onResult: (Boolean, String) -> Unit) {
         backupApp.backupApp(packageName, includeApk, includeObb, includeData, compressZip, onResult)
     }
@@ -415,8 +463,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         appsBackground.killAllApps(_backgroundApps.value, onResult)
     }
 
-    fun toggleInternet(packageName: String, block: Boolean) {
-        appsBackground.toggleInternet(packageName, block)
+    fun toggleInternet(packageName: String, block: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        appsBackground.toggleInternet(packageName, block, onResult)
     }
 
     fun freezeApp(packageName: String, onResult: ((Boolean, String) -> Unit)? = null): Boolean {

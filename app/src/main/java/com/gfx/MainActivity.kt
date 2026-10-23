@@ -27,6 +27,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -69,8 +72,11 @@ class MainActivity : ComponentActivity() {
         LocaleHelper.applySavedLocale(this)
         super.onCreate(savedInstanceState)
 
-        // 🛡️ OBRIGATÓRIO: Inicializa o ShizukuHelper passando o Contexto da aplicação
-        // Deve ser chamado antes de qualquer operação ou observação de estado.
+        /*
+        * 🛡️ OBRIGATÓRIO: Inicializa o ShizukuHelper passando o Contexto da aplicação
+        * Deve ser chamado antes de qualquer operação ou observação de estado.
+        * Inicia o monitoramento em tempo real. 
+        */
         ShizukuHelper.initialize(applicationContext)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -194,6 +200,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
         stringResource(id = R.string.tab_games),
         stringResource(id = R.string.tab_background),
         stringResource(id = R.string.tab_boost_settings),
+        stringResource(id = R.string.tab_backup_app),
         stringResource(id = R.string.tab_scripts)
     )
 
@@ -209,7 +216,30 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     var showAbout by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showHardwareDialog by remember { mutableStateOf(false) }
+    var showLogsDialog by remember { mutableStateOf(false) }
     var hardwareReportText by remember { mutableStateOf("") }
+
+    val shizukuAlert by ShizukuHelper.shizukuAlert.collectAsState()
+    val shizukuSuccess by ShizukuHelper.shizukuSuccess.collectAsState()
+
+    DisposableEffect(Unit) {
+        val prevAlert = ShizukuHelper.onShizukuAlert
+        val prevSuccess = ShizukuHelper.onShizukuSuccess
+        ShizukuHelper.onShizukuAlert = { msg ->
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "⚠️ $msg", Toast.LENGTH_SHORT).show()
+            }
+        }
+        ShizukuHelper.onShizukuSuccess = { msg ->
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, "✅ $msg", Toast.LENGTH_SHORT).show()
+            }
+        }
+        onDispose {
+            ShizukuHelper.onShizukuAlert = prevAlert
+            ShizukuHelper.onShizukuSuccess = prevSuccess
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -232,6 +262,13 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Menu")
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.menu_view_logs)) },
+                        onClick = {
+                            showLogsDialog = true
+                            showMenu = false
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(id = R.string.menu_language)) },
                         onClick = {
@@ -287,12 +324,95 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             }
         }
 
+        shizukuAlert?.let { alertMsg ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = alertMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { ShizukuHelper.clearAlert() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(id = R.string.logs_close),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        shizukuSuccess?.let { successMsg ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = successMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { ShizukuHelper.clearSuccess() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(id = R.string.logs_close),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         val currentTabTitle = tabs.getOrNull(activeIndex) ?: ""
         when {
             thermalMonitorEnabled && activeIndex == 0 -> ThermalMonitorTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_games) -> GameListTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_background) -> BackgroundAppsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_backup_app) -> BackupAppTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_scripts) -> ScriptsTab(viewModel)
             else -> GameListTab(viewModel)
         }
@@ -495,6 +615,165 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             }
         )
     }
+
+    if (showLogsDialog) {
+        LogsDialog(onDismiss = { showLogsDialog = false })
+    }
+}
+
+@Composable
+fun LogsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val logs by ShizukuHelper.logEntries.collectAsState()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    LaunchedEffect(logs.size) {
+        if (logs.isNotEmpty()) {
+            listState.animateScrollToItem(logs.size - 1)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(id = R.string.logs_dialog_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Barra de botões de verificação direta
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            ShizukuHelper.isShizukuAvailable()
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.logs_check_available),
+                            fontSize = 11.sp
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            ShizukuHelper.isShizukuInstalled(context)
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.logs_check_installed),
+                            fontSize = 11.sp
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            ShizukuHelper.hasPermission(context)
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.logs_check_permission),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Área do console de logs
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (logs.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.logs_empty),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                        ) {
+                            items(logs) { entry ->
+                                val textColor = when {
+                                    entry.contains("[ERRO]") -> Color(0xFFFF6B68)
+                                    entry.contains("concedida") || entry.contains("OK") || entry.contains("sucesso") -> Color(0xFF81C784)
+                                    else -> Color(0xFFE0E0E0)
+                                }
+                                Text(
+                                    text = entry,
+                                    fontSize = 11.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    color = textColor,
+                                    modifier = Modifier.padding(vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = {
+                        if (logs.isNotEmpty()) {
+                            val textToCopy = logs.joinToString("\n")
+                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(textToCopy))
+                            Toast.makeText(context, context.getString(R.string.logs_copied_toast), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text(stringResource(id = R.string.logs_copy))
+                }
+                TextButton(
+                    onClick = {
+                        ShizukuHelper.clearLogs()
+                    }
+                ) {
+                    Text(stringResource(id = R.string.logs_clear))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(id = R.string.logs_close))
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -617,6 +896,8 @@ fun GameListTab(viewModel: GameViewModel) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val games by viewModel.games.collectAsState()
+    val updateResults by viewModel.updateCheckResults.collectAsState()
+    val isCheckingAllUpdates by viewModel.isCheckingAllUpdates.collectAsState()
     var selectedGame by remember { mutableStateOf<GameApp?>(null) }
     var showDialog by remember { mutableStateOf(false) }
     var showUpdatesDialog by remember { mutableStateOf(false) }
@@ -806,6 +1087,37 @@ fun GameListTab(viewModel: GameViewModel) {
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
+                        }
+                        val updateInfo = updateResults[game.packageName]
+                        if (updateInfo?.status == UpdateBadgeStatus.UPDATE_AVAILABLE) {
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = Color(0xFFFFF3E0),
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .clickable { showUpdatesDialog = true }
+                            ) {
+                                Text(
+                                    text = "🟠 v${updateInfo.latestVersion} na web",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFE65100),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else if (updateInfo?.status == UpdateBadgeStatus.UP_TO_DATE) {
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = Color(0xFFE8F5E9),
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Text(
+                                    text = "🟢 Atualizado",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF2E7D32),
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                         val res = game.profile?.resolution ?: viewModel.nativeResolution
                         Text(
@@ -1677,32 +1989,252 @@ fun GameListTab(viewModel: GameViewModel) {
     }
 
     if (showUpdatesDialog) {
+        LaunchedEffect(Unit) {
+            if (updateResults.isEmpty() && games.isNotEmpty()) {
+                viewModel.checkAllGameUpdates()
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { showUpdatesDialog = false },
-            title = { Text(stringResource(id = R.string.game_updates_title)) },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.game_updates_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isCheckingAllUpdates) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+            },
             text = {
-                Column {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(id = R.string.game_updates_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
-                        items(games) { game ->
-                            ListItem(
-                                headlineContent = { Text(game.name, style = MaterialTheme.typography.bodyMedium) },
-                                supportingContent = { Text("v${game.versionName}", style = MaterialTheme.typography.bodySmall) },
-                                trailingContent = {
-                                    OutlinedButton(
-                                        onClick = { viewModel.openAppInStore(game.packageName) },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(stringResource(id = R.string.game_open_store), style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { viewModel.checkAllGameUpdates() },
+                        enabled = !isCheckingAllUpdates && games.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        if (isCheckingAllUpdates) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(id = R.string.game_updates_checking))
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(id = R.string.game_updates_check_all))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (games.isEmpty()) {
+                        Text(
+                            text = "Nenhum jogo adicionado na lista.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 380.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(games) { game ->
+                                val info = updateResults[game.packageName]
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = when (info?.status) {
+                                            UpdateBadgeStatus.UPDATE_AVAILABLE -> Color(0xFFFFF8E1)
+                                            UpdateBadgeStatus.UP_TO_DATE -> Color(0xFFF1F8E9)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        }
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = game.name,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.game_updates_installed_ver, game.versionName),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { viewModel.checkUpdateForGame(game) },
+                                                modifier = Modifier.size(28.dp),
+                                                enabled = info?.status != UpdateBadgeStatus.CHECKING
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Refresh,
+                                                    contentDescription = "Recarregar",
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        when (info?.status) {
+                                            UpdateBadgeStatus.CHECKING -> {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(vertical = 4.dp)
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(14.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.game_updates_checking),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                            UpdateBadgeStatus.UP_TO_DATE -> {
+                                                Column {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFFE8F5E9)
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.game_updates_status_uptodate),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = Color(0xFF2E7D32),
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    if (!info.sourceName.isNullOrBlank()) {
+                                                        Text(
+                                                            text = stringResource(R.string.game_updates_source, info.sourceName),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontSize = 10.sp
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            UpdateBadgeStatus.UPDATE_AVAILABLE -> {
+                                                Column {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFFFFF3E0)
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.game_updates_status_available, info.latestVersion ?: ""),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = Color(0xFFE65100),
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    if (!info.sourceName.isNullOrBlank()) {
+                                                        Text(
+                                                            text = stringResource(R.string.game_updates_source, info.sourceName),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontSize = 10.sp
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (!info.downloadUrl.isNullOrBlank()) {
+                                                            Button(
+                                                                onClick = { viewModel.openUpdateUrl(info.downloadUrl) },
+                                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF6C00))
+                                                            ) {
+                                                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(stringResource(R.string.game_updates_download_direct), style = MaterialTheme.typography.labelSmall)
+                                                            }
+                                                        }
+                                                        if (!info.webPageUrl.isNullOrBlank()) {
+                                                            OutlinedButton(
+                                                                onClick = { viewModel.openUpdateUrl(info.webPageUrl) },
+                                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(stringResource(R.string.game_updates_view_web), style = MaterialTheme.typography.labelSmall)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            UpdateBadgeStatus.NOT_FOUND -> {
+                                                Column {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.game_updates_status_notfound),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    OutlinedButton(
+                                                        onClick = { viewModel.searchGameOnWeb(game.packageName) },
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(stringResource(R.string.game_updates_search_web), style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                            }
+                                            else -> {
+                                                OutlinedButton(
+                                                    onClick = { viewModel.checkUpdateForGame(game) },
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(stringResource(R.string.game_updates_check_single), style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                            )
-                            HorizontalDivider()
+                            }
                         }
                     }
                 }
@@ -2124,9 +2656,12 @@ fun SettingItem(
                 checked = checked,
                 onCheckedChange = { newValue ->
                     onCheckedChange(newValue)
-                    if (newValue && !ShizukuHelper.hasPermission() && !ShizukuHelper.isRootAvailable()) {
+                    val isPrivileged = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                    if (newValue && !isPrivileged) {
                         ShizukuHelper.requestPermission()
-                        Toast.makeText(context, context.getString(R.string.shizuku_optional_tip), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.setting_saved_notice), Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.setting_saved_success), Toast.LENGTH_SHORT).show()
                     }
                 }
             )

@@ -1,9 +1,15 @@
-package com.example
+package com.gfx
 
 import android.content.Context
 import java.io.File
 
-object GfxTunerHelper {
+/**
+ * [PT-BR] GfxTools: Utilitário consolidado contendo todas as otimizações do modal "GFX Tuner downgrade mode".
+ *         Permite aplicar perfis agressivos de redução gráfica (modo batata, desativação de sombras,
+ *         redução de polígonos/LOD, remoção de shaders de água/reflexos, redução de explosões/partículas,
+ *         silenciamento de áudio) adaptados para Unity, Unreal Engine, Godot, ITsMagic e Android Game Mode.
+ */
+object GfxTools {
 
     data class GfxConfig(
         val extremePotatoMode: Boolean = false,
@@ -22,9 +28,12 @@ object GfxTunerHelper {
         GENERIC
     }
 
+    /**
+     * [PT-BR] Detecta automaticamente a engine gráfica utilizada pelo jogo inspecionando bibliotecas nativas e arquivos de configuração.
+     */
     fun detectEngine(context: Context, packageName: String): EngineType {
         if (packageName.contains("battle.royale", ignoreCase = true) || packageName.contains("wildlife", ignoreCase = true)) {
-            return EngineType.UNITY // Zooba Battle Royale
+            return EngineType.UNITY // Ex: Zooba Battle Royale
         }
         if (packageName.contains("itsmagic", ignoreCase = true)) {
             return EngineType.ITSMAGIC
@@ -39,13 +48,15 @@ object GfxTunerHelper {
                 if (libs.any { it.contains("unity", ignoreCase = true) }) return EngineType.UNITY
                 if (libs.any { it.contains("UE4", ignoreCase = true) || it.contains("Unreal", ignoreCase = true) }) return EngineType.UNREAL
             }
-            // Verifica existência de pacotes .pck típicos do Godot
+            // Verifica pacotes .pck típicos do Godot
             val dataDir = File("/sdcard/Android/data/$packageName/files")
             if (dataDir.exists() && dataDir.listFiles()?.any { it.extension.equals("pck", ignoreCase = true) } == true) {
                 return EngineType.GODOT
             }
             // Verifica arquivos típicos da ITsMagic Engine
-            if (dataDir.exists() && dataDir.walkTopDown().maxDepth(3).any { it.name.contains("itsmagic", ignoreCase = true) || it.name.equals("engine_settings.json", ignoreCase = true) }) {
+            if (dataDir.exists() && dataDir.walkTopDown().maxDepth(3).any {
+                    it.name.contains("itsmagic", ignoreCase = true) || it.name.equals("engine_settings.json", ignoreCase = true)
+                }) {
                 return EngineType.ITSMAGIC
             }
             EngineType.GENERIC
@@ -54,6 +65,9 @@ object GfxTunerHelper {
         }
     }
 
+    /**
+     * [PT-BR] Carrega a configuração do GFX Tuner salva para o pacote especificado.
+     */
     fun getGfxConfig(context: Context, packageName: String): GfxConfig {
         val prefs = context.getSharedPreferences("gfx_profiles", Context.MODE_PRIVATE)
         return GfxConfig(
@@ -66,6 +80,9 @@ object GfxTunerHelper {
         )
     }
 
+    /**
+     * [PT-BR] Salva a configuração de otimização GFX no SharedPreferences.
+     */
     fun saveGfxConfig(context: Context, packageName: String, config: GfxConfig) {
         val prefs = context.getSharedPreferences("gfx_profiles", Context.MODE_PRIVATE)
         prefs.edit()
@@ -78,6 +95,28 @@ object GfxTunerHelper {
             .apply()
     }
 
+    /**
+     * [PT-BR] Reseta as otimizações do GFX Tuner de um pacote específico.
+     */
+    fun resetGfxConfig(context: Context, packageName: String): String {
+        val prefs = context.getSharedPreferences("gfx_profiles", Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove("${packageName}_extreme")
+            .remove("${packageName}_shadows")
+            .remove("${packageName}_polygons")
+            .remove("${packageName}_water")
+            .remove("${packageName}_explosions")
+            .remove("${packageName}_mute")
+            .apply()
+
+        // Restaura modo padrão no Android Game Mode
+        ShizukuHelper.executeCommand("cmd game reset $packageName")
+        return "Configurações do GFX Tuner resetadas para o padrão."
+    }
+
+    /**
+     * [PT-BR] Aplica todas as otimizações gráficas de downgrade mode no jogo selecionado.
+     */
     fun applyGfxOptimizations(context: Context, packageName: String, config: GfxConfig): String {
         val results = mutableListOf<String>()
         val engine = detectEngine(context, packageName)
@@ -94,28 +133,24 @@ object GfxTunerHelper {
             val unityPrefsFile = "$unityPrefsDir/${packageName}.v2.playerprefs.xml"
 
             if (config.disableShadows || config.extremePotatoMode) {
-                // QualityLevel 0 = Fastest (sem sombras em tempo real no Unity)
                 val cmd1 = "sed -i 's/<int name=\"unity.player_session_count\".*/<int name=\"unity.player_session_count\" value=\"1\" \\/><int name=\"QualitySettings.QualityLevel\" value=\"0\" \\/><int name=\"GraphicsQuality\" value=\"0\" \\/><int name=\"ShadowQuality\" value=\"0\" \\/>/g' $unityPrefsFile"
                 ShizukuHelper.executeCommand(cmd1)
                 results.add("Unity: Sombras e iluminação dinâmica desativadas (ShadowQuality=0, QualityLevel=0)")
             }
 
             if (config.reducePolygons || config.extremePotatoMode) {
-                // Reduz o Mesh LOD Bias para forçar malhas geométricas de baixa contagem de polígonos
                 val cmdLOD = "sed -i 's/<int name=\"QualitySettings.*\"/& <float name=\"unity.lod_bias\" value=\"0.3\" \\/><int name=\"MeshLOD\" value=\"0\" \\/>/g' $unityPrefsFile"
                 ShizukuHelper.executeCommand(cmdLOD)
                 results.add("Unity: Polígonos e geometria simplificados (LOD Bias 0.3)")
             }
 
             if (config.disableWaterEffects || config.extremePotatoMode) {
-                // Desativa reflexões e shaders de água
                 val cmdWater = "sed -i 's/<int name=\"QualitySettings.*\"/& <int name=\"WaterQuality\" value=\"0\" \\/><int name=\"ReflectionsEnabled\" value=\"0\" \\/>/g' $unityPrefsFile"
                 ShizukuHelper.executeCommand(cmdWater)
                 results.add("Unity: Efeitos de água e reflexos desativados")
             }
 
             if (config.disableExplosions || config.extremePotatoMode) {
-                // Reduz partículas e explosões
                 val cmdParticles = "sed -i 's/<int name=\"QualitySettings.*\"/& <int name=\"ParticleRaycastBudget\" value=\"16\" \\/><int name=\"ParticleQuality\" value=\"0\" \\/>/g' $unityPrefsFile"
                 ShizukuHelper.executeCommand(cmdParticles)
                 results.add("Unity: Efeitos de explosão e partículas reduzidos ao mínimo")
@@ -276,13 +311,13 @@ object GfxTunerHelper {
             results.add("ITsMagic: engine_settings.json injetado (sombras desativadas, view distance 40m)")
         }
 
-        // 3. Sistema: Desativação de Som / Áudio Global do canal de mídia
+        // 3. Sistema: Silenciamento de áudio do canal de mídia
         if (config.muteAudio) {
             ShizukuHelper.executeCommand("cmd media_session volume --stream 3 --set 0")
             results.add("Áudio: Canal de mídia do jogo silenciado via Shizuku")
         }
 
-        // 4. Parâmetros gráficos universais no Android
+        // 4. Parâmetros gráficos universais no Android (Downgrade Mode)
         if (config.extremePotatoMode) {
             ShizukuHelper.executeCommand("setprop debug.egl.force_msaa 0")
             ShizukuHelper.executeCommand("setprop debug.hwui.disable_draw_defer 1")

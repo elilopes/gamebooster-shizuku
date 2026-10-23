@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.app.Service
 import android.app.usage.UsageStatsManager

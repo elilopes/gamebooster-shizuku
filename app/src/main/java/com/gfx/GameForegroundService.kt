@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -19,9 +19,9 @@ class GameForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "game_booster_foreground_channel"
         const val NOTIFICATION_ID = 1001
-        const val ACTION_STOP_ALL = "com.example.ACTION_STOP_ALL"
-        const val ACTION_STOP_THERMAL = "com.example.ACTION_STOP_THERMAL"
-        const val ACTION_STOP_ADBLOCK = "com.example.ACTION_STOP_ADBLOCK"
+        const val ACTION_STOP_ALL = "com.gfx.ACTION_STOP_ALL"
+        const val ACTION_STOP_THERMAL = "com.gfx.ACTION_STOP_THERMAL"
+        const val ACTION_STOP_ADBLOCK = "com.gfx.ACTION_STOP_ADBLOCK"
 
         var thermalMonitoringActive = false
         var adBlockerRealtimeActive = false

@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

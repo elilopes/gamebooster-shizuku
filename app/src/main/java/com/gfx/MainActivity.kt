@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.Manifest
 import android.app.Activity
@@ -67,9 +67,6 @@ class MainActivity : ComponentActivity() {
         // 🛡️ OBRIGATÓRIO: Inicializa o ShizukuHelper passando o Contexto da aplicação
         // Deve ser chamado antes de qualquer operação ou observação de estado.
         ShizukuHelper.initialize(applicationContext)
-        
-        // ✅ Depois registre o listener adicional da Activity
-        ShizukuHelper.registerPermissionListener(permissionListener)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -625,7 +622,7 @@ fun GameListTab(viewModel: GameViewModel) {
     var compactResultMsg by remember { mutableStateOf<String?>(null) }
     var showGfxDialog by remember { mutableStateOf(false) }
     var selectedGfxGame by remember { mutableStateOf<GameApp?>(null) }
-    var currentGfxConfig by remember { mutableStateOf(GfxTunerHelper.GfxConfig()) }
+    var currentGfxConfig by remember { mutableStateOf(GfxTools.GfxConfig()) }
     var gfxApplyResultMsg by remember { mutableStateOf<String?>(null) }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
@@ -1231,23 +1228,35 @@ fun GameListTab(viewModel: GameViewModel) {
 
     if (showGfxDialog && selectedGfxGame != null) {
         val game = selectedGfxGame!!
-        val engine = GfxTunerHelper.detectEngine(context, game.packageName)
+        val engine = GfxTools.detectEngine(context, game.packageName)
         val engineName = when (engine) {
-            GfxTunerHelper.EngineType.UNITY -> "Unity (Zooba, etc.)"
-            GfxTunerHelper.EngineType.GODOT -> "Godot Engine (override.cfg)"
-            GfxTunerHelper.EngineType.ITSMAGIC -> "ITsMagic Engine (engine_settings.json)"
-            GfxTunerHelper.EngineType.UNREAL -> "Unreal Engine"
-            GfxTunerHelper.EngineType.GENERIC -> "Genérico (Android Game Mode)"
+            GfxTools.EngineType.UNITY -> "Unity (Zooba, etc.)"
+            GfxTools.EngineType.GODOT -> "Godot Engine (override.cfg)"
+            GfxTools.EngineType.ITSMAGIC -> "ITsMagic Engine (engine_settings.json)"
+            GfxTools.EngineType.UNREAL -> "Unreal Engine"
+            GfxTools.EngineType.GENERIC -> "Genérico (Android Game Mode)"
         }
 
         AlertDialog(
             onDismissRequest = { showGfxDialog = false },
             title = {
-                Text("${stringResource(id = R.string.gfx_tuner_title)}: ${game.name}")
+                Text(stringResource(id = R.string.gfx_tuner_title))
             },
             text = {
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
                     item {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = game.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
                         Surface(
                             shape = MaterialTheme.shapes.small,
                             color = MaterialTheme.colorScheme.secondaryContainer,

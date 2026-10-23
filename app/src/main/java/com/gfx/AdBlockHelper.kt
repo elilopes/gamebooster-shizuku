@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager

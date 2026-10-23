@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.content.Context
 import android.content.SharedPreferences

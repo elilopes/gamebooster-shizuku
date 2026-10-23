@@ -1,0 +1,6 @@
+<resources>
+    <string name="terms_title">Terms of Use</string>
+    <string name="terms_body">This application is not responsible for system instability, unsolicited restarts, or device overheating. Some optimizations/modifications made by this application may be recognized by game developers as cheating, which may lead to account bans. Please back up your games before making changes.</string>
+    <string name="terms_accept_checkbox">I accept the terms of use</string>
+    <string name="terms_start_btn">Start</string>
+</resources>

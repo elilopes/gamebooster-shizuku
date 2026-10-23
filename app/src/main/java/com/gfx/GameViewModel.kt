@@ -1,4 +1,4 @@
-package com.example
+package com.gfx
 
 import android.app.ActivityManager
 import android.app.Application
@@ -10,8 +10,8 @@ import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.AppDatabase
-import com.example.data.GameProfile
+import com.gfx.data.AppDatabase
+import com.gfx.data.GameProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -186,7 +186,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         @Suppress("DEPRECATION")
         if ((appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0) return true
 
-        if (GfxTunerHelper.detectEngine(app, pkgName) != GfxTunerHelper.EngineType.GENERIC) return true
+        if (GfxTools.detectEngine(app, pkgName) != GfxTools.EngineType.GENERIC) return true
 
         val label = try { appInfo.loadLabel(packageManager).toString().lowercase() } catch (e: Exception) { "" }
         val pkg = pkgName.lowercase()
@@ -764,8 +764,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             ShellFunctions.executePrivileged("echo performance > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
         }
 
-        val gfxConfig = GfxTunerHelper.getGfxConfig(app, packageName)
-        GfxTunerHelper.applyGfxOptimizations(app, packageName, gfxConfig)
+        val gfxConfig = GfxTools.getGfxConfig(app, packageName)
+        GfxTools.applyGfxOptimizations(app, packageName, gfxConfig)
 
         val profile = _games.value.find { it.packageName == packageName }?.profile
         if (profile != null) {
@@ -786,17 +786,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun getGfxConfig(packageName: String): GfxTunerHelper.GfxConfig {
-        return GfxTunerHelper.getGfxConfig(app, packageName)
+    fun getGfxConfig(packageName: String): GfxTools.GfxConfig {
+        return GfxTools.getGfxConfig(app, packageName)
     }
 
-    fun saveGfxConfig(packageName: String, config: GfxTunerHelper.GfxConfig) {
-        GfxTunerHelper.saveGfxConfig(app, packageName, config)
+    fun saveGfxConfig(packageName: String, config: GfxTools.GfxConfig) {
+        GfxTools.saveGfxConfig(app, packageName, config)
     }
 
     fun applyGfxProfile(packageName: String): String {
-        val config = GfxTunerHelper.getGfxConfig(app, packageName)
-        return GfxTunerHelper.applyGfxOptimizations(app, packageName, config)
+        val config = GfxTools.getGfxConfig(app, packageName)
+        return GfxTools.applyGfxOptimizations(app, packageName, config)
     }
 
     fun saveProfile(packageName: String, resolution: String, density: Int) {

@@ -3,7 +3,12 @@ package com.gfx
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.IBinder
 import android.util.Log
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.lang.reflect.Method
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -146,11 +151,11 @@ object ShizukuHelper {
      */
     fun dispatchAlert(errorMsg: String, cause: Throwable? = null) {
         if (cause != null) {
-            Log.e("ShizukuHelper", errorMsg, cause)
-            Log.e("ShizukuManager", errorMsg, cause)
+            Log.d("ShizukuHelper", "$errorMsg: ${cause.message}")
+            Log.d("ShizukuManager", "$errorMsg: ${cause.message}")
         } else {
-            Log.e("ShizukuHelper", errorMsg)
-            Log.e("ShizukuManager", errorMsg)
+            Log.d("ShizukuHelper", errorMsg)
+            Log.d("ShizukuManager", errorMsg)
         }
         addLog(errorMsg, isError = true)
         _shizukuAlert.value = errorMsg
@@ -257,12 +262,16 @@ object ShizukuHelper {
     }
 
     /**
-     * [PT-BR] Alias para verificar se o serviço do Shizuku está em execução no dispositivo.
+     * [PT-BR] Alias para verificar se o serviço do Shizuku está em execução no dispositivo de forma limpa.
      *
-     * [EN] Alias checking whether Shizuku service is running.
+     * [EN] Clean alias checking whether Shizuku service is running.
      */
     fun isShizukuRunning(): Boolean {
-        return isShizukuAvailable()
+        return try {
+            Shizuku.pingBinder()
+        } catch (e: Throwable) {
+            false
+        }
     }
 
     /**
@@ -274,64 +283,30 @@ object ShizukuHelper {
      * @return true se o binder do Shizuku responder com sucesso ao ping, false caso contrário.
      */
     fun isShizukuAvailable(): Boolean {
-        // 1. Primeira tentativa: Verificar se o binder já está respondendo normalmente
-        try {
+        return try {
+            // Forma oficial para reconhecer se Shizuku está ativado (verifica se o binder respondeu com sucesso)
             val available = Shizuku.pingBinder()
             if (available) {
                 val successMsg = "Shizuku ativado e respondendo com sucesso (pingBinder OK)."
                 Log.d("ShizukuHelper", successMsg)
-                addLog("Shizuku ativado e respondendo com sucesso (pingBinder OK).")
                 dispatchSuccess(successMsg)
-                return true
+                true
+            } else {
+                val infoMsg = "Shizuku.pingBinder() indisponível: o serviço não está ativo."
+                Log.d("ShizukuHelper", infoMsg)
+                addLog(infoMsg, isError = true)
+                _shizukuAlert.value = infoMsg
+                onShizukuAlert?.invoke(infoMsg)
+                false
             }
         } catch (e: Throwable) {
-            Log.d("ShizukuHelper", "Shizuku.pingBinder() indisponível na primeira tentativa: ${e.message}")
-            addLog("Shizuku indisponível na primeira tentativa (pingBinder com falha): ${e.message}.")
+            val infoMsg = "Shizuku.pingBinder() indisponível: ${e.message ?: "o serviço não está ativo."}"
+            Log.d("ShizukuHelper", infoMsg)
+            addLog(infoMsg, isError = true)
+            _shizukuAlert.value = infoMsg
+            onShizukuAlert?.invoke(infoMsg)
+            false
         }
-
-        // 2. Se falhou, aciona o Fallback de Recuperação Automática
-        Log.w("ShizukuHelper", "Shizuku indisponível, tentando recuperação automática do serviço...")
-        addLog("Shizuku indisponível, tentando recuperação automática do serviço")
-        
-        val ctx = appContext
-        if (ctx != null) {
-            // Verifica se está instalado antes de tentar iniciar
-            if (isShizukuInstalled(ctx)) {
-                try {
-                    // Tenta iniciar o serviço de forma automática (via root ou script local)
-                    val bootResult = startShizukuService(ctx)
-                    Log.d("ShizukuHelper", "Resultado da recuperação automática: $bootResult")
-                    addLog("Resultado da recuperação automática... $bootResult")
-
-                    // Aguarda uma fração de segundo para o binder subir e testa novamente
-                    Thread.sleep(500)
-
-                    val retryAvailable = Shizuku.pingBinder()
-                    if (retryAvailable) {
-                        val recoverySuccessMsg = "Shizuku recuperado e ativado com sucesso via fallback automático!"
-                        Log.d("ShizukuHelper", recoverySuccessMsg)
-                        addLog("Shizuku recuperado e ativado com sucesso via fallback automático!")
-                        dispatchSuccess(recoverySuccessMsg)
-                        return true
-                    }
-                } catch (recoveryEx: Throwable) {
-                    Log.e("ShizukuHelper", "Falha durante o processo de recuperação automática: ${recoveryEx.message}", recoveryEx)
-                    addLog("Falha durante o processo de recuperação automática: ${recoveryEx.message}.")
-                }
-            } else {
-                val installError = "Impossível recuperar: o aplicativo Shizuku não está instalado."
-                Log.e("ShizukuHelper", installError)
-                addLog("Impossível recuperar: o aplicativo Shizuku não está instalado.")
-                dispatchAlert(installError)
-                return false
-            }
-        }
-
-        // 3. Se todas as tentativas de recuperação falharem, despacha o alerta final
-        val finalErrorMsg = "Shizuku indisponível e falha na recuperação automática. Inicie manualmente."
-        Log.w("ShizukuHelper", finalErrorMsg)
-        dispatchAlert(finalErrorMsg)
-        return false
     }
 
     /**
@@ -347,8 +322,10 @@ object ShizukuHelper {
         val ctx = context ?: appContext
         if (ctx == null) {
             val errorMsg = "Contexto não disponível para verificar instalação do Shizuku."
-            Log.e("ShizukuHelper", errorMsg)
-            dispatchAlert(errorMsg)
+            Log.d("ShizukuHelper", errorMsg)
+            _shizukuAlert.value = errorMsg
+            addLog(errorMsg, isError = true)
+            onShizukuAlert?.invoke(errorMsg)
             return false
         }
         for (pkg in KNOWN_SHIZUKU_PACKAGES) {
@@ -365,8 +342,10 @@ object ShizukuHelper {
             }
         }
         val errorMsg = "Aplicativo gerenciador Shizuku não foi encontrado instalado no dispositivo."
-        Log.w("ShizukuHelper", errorMsg)
-        dispatchAlert(errorMsg)
+        Log.d("ShizukuHelper", errorMsg)
+        _shizukuAlert.value = errorMsg
+        addLog(errorMsg, isError = true)
+        onShizukuAlert?.invoke(errorMsg)
         return false
     }
 
@@ -374,20 +353,25 @@ object ShizukuHelper {
      * [PT-BR] Verifica se a permissão do Shizuku foi concedida para a aplicação.
      * Suporta o modelo tradicional pré-v11 via PackageManager ("moe.shizuku.manager.permission.API_V23")
      * e o modelo moderno (v11+) via Binder.
-     * Emite alerta de sucesso ou erro para o Log e para a interface do aplicativo.
+     * Quando [dispatchFeedback] for true, emite alerta de sucesso ou erro para o Log e interface.
      *
      * [EN] Checks if Shizuku permission has been granted to the application.
      * Supports legacy pre-v11 and modern v11+ binder checks.
      *
      * @param context Contexto opcional do Android (utiliza [appContext] se omitido).
+     * @param dispatchFeedback Se deve emitir feedback visual/log na interface.
      * @return true se a permissão foi concedida, false caso contrário.
      */
-    fun hasPermission(context: Context? = appContext): Boolean {
+    fun hasPermission(context: Context? = appContext, dispatchFeedback: Boolean = false): Boolean {
         val ctx = context ?: appContext
         if (!isShizukuRunning()) {
-            val errorMsg = "Shizuku não está ativo ou em execução."
-            Log.w("ShizukuManager", errorMsg)
-            dispatchAlert(errorMsg)
+            if (dispatchFeedback) {
+                val errorMsg = "Shizuku não está ativo ou em execução."
+                Log.d("ShizukuManager", errorMsg)
+                _shizukuAlert.value = errorMsg
+                addLog(errorMsg, isError = true)
+                onShizukuAlert?.invoke(errorMsg)
+            }
             return false
         }
 
@@ -400,9 +384,7 @@ object ShizukuHelper {
                     false
                 }
             } catch (e: Exception) {
-                val errorMsg = "Erro ao verificar permissão tradicional pré-v11: ${e.message}"
-                Log.e("ShizukuManager", errorMsg)
-                dispatchAlert(errorMsg, e)
+                Log.d("ShizukuManager", "Erro ao verificar permissão tradicional pré-v11: ${e.message}")
                 false
             }
         } else {
@@ -410,24 +392,175 @@ object ShizukuHelper {
             try {
                 Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
             } catch (e: Throwable) {
-                val errorMsg = "Erro ao verificar permissão do Shizuku: ${e.message}"
-                Log.e("ShizukuManager", errorMsg)
-                dispatchAlert(errorMsg, e)
+                Log.d("ShizukuManager", "Erro ao verificar permissão do Shizuku: ${e.message}")
                 false
             }
         }
 
-        if (granted) {
-            val successMsg = "Permissão do Shizuku verificada e concedida!"
-            Log.d("ShizukuManager", successMsg)
-            dispatchSuccess(successMsg)
-        } else {
-            val errorMsg = "Permissão do Shizuku não concedida ou negada."
-            Log.w("ShizukuManager", errorMsg)
-            dispatchAlert(errorMsg)
+        if (dispatchFeedback) {
+            if (granted) {
+                val successMsg = "Permissão do Shizuku verificada e concedida!"
+                Log.d("ShizukuManager", successMsg)
+                dispatchSuccess(successMsg)
+            } else {
+                val errorMsg = "Permissão do Shizuku não concedida ou negada."
+                Log.d("ShizukuManager", errorMsg)
+                _shizukuAlert.value = errorMsg
+                addLog(errorMsg, isError = true)
+                onShizukuAlert?.invoke(errorMsg)
+            }
         }
 
         return granted
+    }
+
+    /**
+     * [PT-BR] Forma alternativa 1: Verificação via Content Provider (Recomendada sem SDK).
+     * O Shizuku utiliza um ContentProvider interno para comunicação rápida ("content://moe.shizuku.privileged.api.provider.BinderProvider").
+     * Realiza uma consulta a esse provedor para inferir se o servidor está respondendo.
+     * Emite alerta de sucesso ou erro para o Log e para a interface do aplicativo.
+     *
+     * [EN] Alternative method 1: Verification via Content Provider (Recommended without SDK).
+     */
+    fun isShizukuRunningProvider(context: Context? = appContext): Boolean {
+        val ctx = context ?: appContext
+        if (ctx == null) {
+            val errorMsg = "Contexto indisponível para consulta via Content Provider."
+            Log.d("ShizukuHelper", errorMsg)
+            dispatchAlert(errorMsg)
+            return false
+        }
+        return try {
+            // URI do Binder do Shizuku
+            val uri = Uri.parse("content://moe.shizuku.privileged.api.provider.BinderProvider")
+            val cursor = ctx.contentResolver.query(uri, null, null, null, null)
+
+            val running = if (cursor != null) {
+                cursor.close()
+                true // Se retornou um cursor válido, o serviço está de pé
+            } else {
+                false
+            }
+
+            if (running) {
+                val successMsg = "Shizuku verificado com sucesso via Content Provider (BinderProvider ativo)!"
+                Log.d("ShizukuHelper", successMsg)
+                dispatchSuccess(successMsg)
+            } else {
+                val errorMsg = "Shizuku não está respondendo via Content Provider (cursor nulo)."
+                Log.d("ShizukuHelper", errorMsg)
+                dispatchAlert(errorMsg)
+            }
+            running
+        } catch (e: Exception) {
+            // Lança exceção se o provider não responder ou não existir (serviço parado)
+            val errorMsg = "Falha ao verificar Shizuku via Content Provider: ${e.message}"
+            Log.d("ShizukuHelper", errorMsg)
+            dispatchAlert(errorMsg, e)
+            false
+        }
+    }
+
+    /**
+     * [PT-BR] Forma alternativa 2: Verificação via Reflection do Token (Uso do Binder Interno).
+     * Caso queira verificar se o binder está ativo no sistema sem usar os métodos visíveis da API,
+     * checa reflexivamente se a classe ShizukuService consegue dar um ping no Binder que gerencia a comunicação.
+     * Emite alerta de sucesso ou erro para o Log e para a interface do aplicativo.
+     *
+     * [EN] Alternative method 2: Verification via Token Reflection (Internal Binder usage).
+     */
+    fun isShizukuBinderAlive(): Boolean {
+        return try {
+            // Tenta carregar a classe do ShizukuService em tempo de execução
+            val clazz = Class.forName("rikka.shizuku.ShizukuService")
+            val getBinderMethod: Method = clazz.getMethod("getBinder")
+            val binder = getBinderMethod.invoke(null) as? IBinder
+
+            // Verifica se o Binder existe e se a transação com ele está respondendo
+            val alive = binder != null && binder.isBinderAlive
+
+            if (alive) {
+                val successMsg = "Shizuku verificado com sucesso via Reflection (Binder interno ativo e respondendo)!"
+                Log.d("ShizukuHelper", successMsg)
+                dispatchSuccess(successMsg)
+            } else {
+                val errorMsg = "Shizuku inativo via Reflection (Binder nulo ou não responsivo)."
+                Log.d("ShizukuHelper", errorMsg)
+                dispatchAlert(errorMsg)
+            }
+            alive
+        } catch (e: Exception) {
+            val errorMsg = "Falha ao verificar Shizuku via Reflection: ${e.message}"
+            Log.d("ShizukuHelper", errorMsg)
+            dispatchAlert(errorMsg, e)
+            false
+        }
+    }
+
+    /**
+     * [PT-BR] Forma alternativa 3: Execução de Comando Shell (Método de Fallback).
+     * Executa o comando para checar se o servidor do Shizuku (shizuku_server) está listado nos processos ativos via pgrep ou pidof.
+     * Emite alerta de sucesso ou erro para o Log e para a interface do aplicativo.
+     *
+     * [EN] Alternative method 3: Shell Command Execution (Fallback method).
+     */
+    fun isShizukuProcessRunning(): Boolean {
+        return try {
+            var running = false
+            var pid: String? = null
+
+            // 1. Executa o comando pgrep para checar se o servidor do Shizuku está listado nos processos ativos
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf("pgrep", "-f", "shizuku_server"))
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                val output = reader.readLine()
+
+                reader.close()
+                process.destroy()
+
+                if (!output.isNullOrBlank()) {
+                    running = true
+                    pid = output.trim()
+                }
+            } catch (e: Exception) {
+                // pgrep pode não existir em alguns ambientes
+            }
+
+            // 2. Se não encontrou via pgrep, tenta via pidof como fallback adicional
+            if (!running) {
+                try {
+                    val process = Runtime.getRuntime().exec(arrayOf("pidof", "shizuku_server"))
+                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                    val output = reader.readLine()
+
+                    reader.close()
+                    process.destroy()
+
+                    if (!output.isNullOrBlank()) {
+                        running = true
+                        pid = output.trim()
+                    }
+                } catch (e: Exception) {
+                    // pidof falhou
+                }
+            }
+
+            if (running) {
+                val successMsg = "Processo do servidor Shizuku (shizuku_server) está ativo no sistema (PID: $pid)!"
+                Log.d("ShizukuHelper", successMsg)
+                dispatchSuccess(successMsg)
+            } else {
+                val errorMsg = "Servidor do Shizuku não foi detectado em execução nos processos (shizuku_server inativo)."
+                Log.d("ShizukuHelper", errorMsg)
+                dispatchAlert(errorMsg)
+            }
+            running
+        } catch (e: Exception) {
+            val errorMsg = "Falha ao verificar processo do Shizuku via comando Shell: ${e.message}"
+            Log.d("ShizukuHelper", errorMsg)
+            dispatchAlert(errorMsg, e)
+            false
+        }
     }
 
     /**

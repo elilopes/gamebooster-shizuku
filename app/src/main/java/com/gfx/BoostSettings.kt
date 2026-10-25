@@ -38,8 +38,10 @@ class BoostSettings(
     private fun dispatchAlert(errorMsg: String, cause: Throwable? = null) {
         if (cause != null) {
             Log.e("BoostSettings", errorMsg, cause)
+            CrashReporterHelper.recordException("BoostSettings", errorMsg, cause)
         } else {
             Log.e("BoostSettings", errorMsg)
+            CrashReporterHelper.recordException("BoostSettings", errorMsg)
         }
         // Dispara o alerta diretamente para a interface do aplicativo via ShizukuHelper
         ShizukuHelper.onShizukuAlert?.invoke(errorMsg)
@@ -78,6 +80,24 @@ class BoostSettings(
     /** [PT-BR] Estado do modo de frequência máxima da GPU. [EN] Force maximum GPU frequency state. */
     val forceMaxGpu = MutableStateFlow(false)
 
+    /** [PT-BR] Estado do Modo de Jogo Nativo / Gaming Hub (Android Core Game Mode 2). [EN] Native Game Mode state. */
+    val nativeGameMode = MutableStateFlow(false)
+
+    /** [PT-BR] Estado do bloqueio de notificações flutuantes em jogos. [EN] Block heads-up notifications during gaming state. */
+    val blockNotificationsGamer = MutableStateFlow(false)
+
+    /** [PT-BR] Estado da redução do buffer de logger do sistema (64K). [EN] Reduce system logger buffer size state. */
+    val reduceLoggerBuffer = MutableStateFlow(false)
+
+    /** [PT-BR] Estado da desativação de serviços desnecessários (Print Spooler). [EN] Disable unnecessary services (Print Spooler) state. */
+    val disablePrintSpooler = MutableStateFlow(false)
+
+    /** [PT-BR] Estado da imposição de driver gráfico do sistema / Game Driver. [EN] Force system graphics driver state. */
+    val forceSystemGraphicsDriver = MutableStateFlow(false)
+
+    /** [PT-BR] Estado da aceleração de jogos Web / WebView (GPU Rasterization, Zero-Copy e Sandboxed Boost). [EN] Web / WebView Game Boost state. */
+    val webViewGameBoost = MutableStateFlow(false)
+
     init {
         loadBoostSettings()
     }
@@ -99,6 +119,12 @@ class BoostSettings(
             forceDeepSleepCache.value = boostPrefs.getBoolean("forceDeepSleepCache", false)
             forceMaxCpu.value = boostPrefs.getBoolean("forceMaxCpu", false)
             forceMaxGpu.value = boostPrefs.getBoolean("forceMaxGpu", false)
+            nativeGameMode.value = boostPrefs.getBoolean("nativeGameMode", false)
+            blockNotificationsGamer.value = boostPrefs.getBoolean("blockNotificationsGamer", false)
+            reduceLoggerBuffer.value = boostPrefs.getBoolean("reduceLoggerBuffer", false)
+            disablePrintSpooler.value = boostPrefs.getBoolean("disablePrintSpooler", false)
+            forceSystemGraphicsDriver.value = boostPrefs.getBoolean("forceSystemGraphicsDriver", false)
+            webViewGameBoost.value = boostPrefs.getBoolean("webViewGameBoost", false)
         } catch (e: Exception) {
             dispatchAlert("Erro ao carregar configurações de boost salvas: ${e.message}", e)
         }
@@ -621,6 +647,247 @@ class BoostSettings(
                     forceMaxGpu.value = false
                     boostPrefs.edit().putBoolean("forceMaxGpu", false).apply()
                     val msg = "Erro ao configurar frequência da GPU: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna o Modo de Jogo Nativo / Gaming Hub (Android Core Game Mode 2).
+     * [EN] Toggles Native Game Mode / Gaming Hub (Android Core Game Mode 2).
+     */
+    fun toggleNativeGameMode(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            nativeGameMode.value = false
+            boostPrefs.edit().putBoolean("nativeGameMode", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para ativar o Modo Jogo Nativo."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        nativeGameMode.value = enable
+        boostPrefs.edit().putBoolean("nativeGameMode", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                if (enable) {
+                    ShellFunctions.executePrivileged("settings put global low_power 0")
+                    ShellFunctions.executePrivileged("setprop debug.game.performance_mode 1")
+                } else {
+                    ShellFunctions.executePrivileged("setprop debug.game.performance_mode 0")
+                }
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Modo de Jogo Nativo ativado! Economia de bateria desligada." else "Modo de Jogo Nativo desativado."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    nativeGameMode.value = false
+                    boostPrefs.edit().putBoolean("nativeGameMode", false).apply()
+                    val msg = "Erro ao configurar Modo de Jogo Nativo: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna o bloqueio de notificações flutuantes (heads-up) durante jogos.
+     * [EN] Toggles blocking of heads-up notifications during gaming.
+     */
+    fun toggleBlockNotificationsGamer(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            blockNotificationsGamer.value = false
+            boostPrefs.edit().putBoolean("blockNotificationsGamer", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para bloquear notificações."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        blockNotificationsGamer.value = enable
+        boostPrefs.edit().putBoolean("blockNotificationsGamer", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val state = if (enable) "0" else "1"
+                ShellFunctions.executePrivileged("settings put global heads_up_notifications_enabled $state")
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Notificações flutuantes bloqueadas durante jogos." else "Notificações flutuantes restauradas."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    blockNotificationsGamer.value = false
+                    boostPrefs.edit().putBoolean("blockNotificationsGamer", false).apply()
+                    val msg = "Erro ao alternar bloqueio de notificações: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna a redução do buffer de logger do sistema (64K) para diminuir sobrecarga de CPU e I/O.
+     * [EN] Toggles logger buffer reduction (64K) to reduce CPU and I/O overhead.
+     */
+    fun toggleReduceLoggerBuffer(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            reduceLoggerBuffer.value = false
+            boostPrefs.edit().putBoolean("reduceLoggerBuffer", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para alterar buffer de logger."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        reduceLoggerBuffer.value = enable
+        boostPrefs.edit().putBoolean("reduceLoggerBuffer", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val size = if (enable) "64K" else "256K"
+                ShellFunctions.executePrivileged("logcat -G $size")
+                ShellFunctions.executePrivileged("setprop persist.logd.size $size")
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Buffer do Logger reduzido para 64K (Menos sobrecarga de CPU/IO)." else "Buffer do Logger restaurado para padrão (256K)."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    reduceLoggerBuffer.value = false
+                    boostPrefs.edit().putBoolean("reduceLoggerBuffer", false).apply()
+                    val msg = "Erro ao configurar buffer do logger: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna a desativação de serviços desnecessários em segundo plano (como o Print Spooler).
+     * [EN] Toggles disabling of unnecessary background services (such as Print Spooler).
+     */
+    fun toggleDisablePrintSpooler(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            disablePrintSpooler.value = false
+            boostPrefs.edit().putBoolean("disablePrintSpooler", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para gerenciar serviços."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        disablePrintSpooler.value = enable
+        boostPrefs.edit().putBoolean("disablePrintSpooler", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val cmd = if (enable) "pm disable-user com.android.printspooler" else "pm enable com.android.printspooler"
+                ShellFunctions.executePrivileged(cmd)
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Serviço de impressão desativado (Liberação de RAM/CPU)." else "Serviço de impressão reativado."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    disablePrintSpooler.value = false
+                    boostPrefs.edit().putBoolean("disablePrintSpooler", false).apply()
+                    val msg = "Erro ao alterar serviço de impressão: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna a imposição do Driver Gráfico do Sistema (Game Driver / Atualizável) para todos os jogos.
+     * [EN] Toggles forcing System Graphics Driver (Game Driver / Updatable) for all games.
+     */
+    fun toggleForceSystemGraphicsDriver(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            forceSystemGraphicsDriver.value = false
+            boostPrefs.edit().putBoolean("forceSystemGraphicsDriver", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para configurar Game Driver."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        forceSystemGraphicsDriver.value = enable
+        boostPrefs.edit().putBoolean("forceSystemGraphicsDriver", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val state = if (enable) "1" else "0"
+                ShellFunctions.executePrivileged("settings put global updatable_driver_all_apps $state")
+                ShellFunctions.executePrivileged("setprop debug.graphics.game_default_driver $state")
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Game Driver do Sistema forçado para renderização de jogos!" else "Driver gráfico restaurado para o padrão."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    forceSystemGraphicsDriver.value = false
+                    boostPrefs.edit().putBoolean("forceSystemGraphicsDriver", false).apply()
+                    val msg = "Erro ao configurar driver gráfico: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Alterna a aceleração de jogos Web / WebView (GPU Rasterization, Zero-Copy e Prioridade Sandboxed).
+     * [EN] Toggles Web / WebView game acceleration (GPU Rasterization, Zero-Copy and Sandboxed Priority).
+     */
+    fun toggleWebViewGameBoost(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            webViewGameBoost.value = false
+            boostPrefs.edit().putBoolean("webViewGameBoost", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para acelerar jogos WebView."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        webViewGameBoost.value = enable
+        boostPrefs.edit().putBoolean("webViewGameBoost", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                if (enable) {
+                    val flags = "_ --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --force-gpu-mem-available-mb=512 --disable-gpu-vsync --disable-background-timer-throttling"
+                    ShellFunctions.executePrivileged("mkdir -p /data/local/tmp")
+                    ShellFunctions.executePrivileged("echo \"$flags\" > /data/local/tmp/webview-command-line")
+                    ShellFunctions.executePrivileged("chmod 755 /data/local/tmp/webview-command-line")
+
+                    ShellFunctions.executePrivileged("setprop debug.hwui.renderer skiagl")
+                    ShellFunctions.executePrivileged("setprop debug.hwui.render_ahead 1")
+                    ShellFunctions.executePrivileged("setprop debug.hwui.texture_cache_size 72")
+                    ShellFunctions.executePrivileged("setprop debug.hwui.texture_cache_flushrate 0.8")
+
+                    ShellFunctions.executePrivileged("for p in \$(pgrep -f 'sandboxed_process'); do renice -n -20 -p \$p 2>/dev/null; echo -1000 > /proc/\$p/oom_score_adj 2>/dev/null; done")
+                } else {
+                    ShellFunctions.executePrivileged("rm -f /data/local/tmp/webview-command-line")
+                }
+                withContext(Dispatchers.Main) {
+                    val msg = if (enable) "Aceleração WebGL/WebView ativada (GPU Rasterization & Zero-Copy)!" else "Aceleração de WebView restaurada ao padrão."
+                    onResult?.invoke(true, msg)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    webViewGameBoost.value = false
+                    boostPrefs.edit().putBoolean("webViewGameBoost", false).apply()
+                    val msg = "Erro ao configurar aceleração WebView: ${e.message}"
                     dispatchAlert(msg, e)
                     onResult?.invoke(false, msg)
                 }

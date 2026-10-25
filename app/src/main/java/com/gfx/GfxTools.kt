@@ -17,51 +17,140 @@ object GfxTools {
         val reducePolygons: Boolean = false,
         val disableWaterEffects: Boolean = false,
         val disableExplosions: Boolean = false,
-        val muteAudio: Boolean = false
+        val muteAudio: Boolean = false,
+        val astcTextureCompression: Boolean = false,
+        val forceMipmapping: Boolean = false,
+        val webViewGpuBoost: Boolean = false,
+        val cleanWebViewCache: Boolean = false
     )
 
-    enum class EngineType {
-        UNITY,
-        UNREAL,
-        GODOT,
-        ITSMAGIC,
-        GENERIC
+    enum class EngineType(
+        val displayName: String,
+        val shortName: String,
+        val badgeColorHex: Long,
+        val iconEmoji: String
+    ) {
+        UNITY("Unity", "Unity", 0xFF1976D2, "🎮"),
+        UNREAL("Unreal Engine", "Unreal", 0xFF7B1FA2, "⚡"),
+        GODOT("Godot Engine", "Godot", 0xFF388E3C, "🤖"),
+        ITSMAGIC("ITsMagic", "ITsMagic", 0xFFE65100, "✨"),
+        ANDROID_STUDIO("Android Studio", "Android Studio", 0xFF2E7D32, "📱"),
+        WEBVIEW("Modo Web (HTML5/WebView)", "Modo Web", 0xFF0097A7, "🌐"),
+        COCOS("Cocos2d", "Cocos2d", 0xFFD32F2F, "🕹️"),
+        GENERIC("Genérico (Android Game Mode)", "Genérico", 0xFF546E7A, "⚙️"),
+        UNKNOWN("Origem Desconhecida", "Desconhecida", 0xFF757575, "❓")
     }
 
     /**
-     * [PT-BR] Detecta automaticamente a engine gráfica utilizada pelo jogo inspecionando bibliotecas nativas e arquivos de configuração.
+     * [PT-BR] Detecta automaticamente a engine gráfica ou modo web utilizado pelo aplicativo / jogo,
+     * inspecionando bibliotecas nativas (.so), manifesto, assets empacotados e arquivos de configuração.
+     * Suporta: Unreal Engine, Unity, ITsMagic, Godot, Android Studio (Nativo), Modo Web (WebView/React/Cordova)
+     * e Origem Desconhecida se a inspeção falhar.
      */
     fun detectEngine(context: Context, packageName: String): EngineType {
-        if (packageName.contains("battle.royale", ignoreCase = true) || packageName.contains("wildlife", ignoreCase = true)) {
-            return EngineType.UNITY // Ex: Zooba Battle Royale
-        }
-        if (packageName.contains("itsmagic", ignoreCase = true)) {
-            return EngineType.ITSMAGIC
-        }
+        val lowerPkg = packageName.lowercase()
+        if (lowerPkg.contains("itsmagic")) return EngineType.ITSMAGIC
+        if (lowerPkg.contains("godot")) return EngineType.GODOT
+        if (lowerPkg.contains("unity3d") || lowerPkg.contains("battle.royale") || lowerPkg.contains("wildlife")) return EngineType.UNITY
+        if (lowerPkg.contains("epicgames") || lowerPkg.contains("unreal")) return EngineType.UNREAL
+
         return try {
             val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+
+            // 1. Inspeciona o arquivo APK (.apk) via ZipFile (alta fidelidade de detecção de assets e libs)
+            val sourceApk = File(appInfo.sourceDir)
+            if (sourceApk.exists() && sourceApk.canRead()) {
+                try {
+                    java.util.zip.ZipFile(sourceApk).use { zip ->
+                        var hasUnity = false
+                        var hasUnreal = false
+                        var hasGodot = false
+                        var hasItsMagic = false
+                        var hasWeb = false
+                        var hasCocos = false
+                        var hasClassesDex = false
+
+                        val entries = zip.entries()
+                        var count = 0
+                        while (entries.hasMoreElements() && count < 2500) {
+                            count++
+                            val entryName = entries.nextElement().name.lowercase()
+
+                            if (entryName.contains("classes.dex")) hasClassesDex = true
+                            if (entryName.contains("libunity.so") || entryName.contains("libil2cpp.so") || entryName.contains("assets/bin/data/")) hasUnity = true
+                            if (entryName.contains("libue4.so") || entryName.contains("libunreal.so") || entryName.contains("libunrealengine.so") || entryName.contains("assets/ue4/")) hasUnreal = true
+                            if (entryName.contains("libgodot_android.so") || entryName.endsWith(".pck")) hasGodot = true
+                            if (entryName.contains("libitsmagic") || entryName.contains("engine_settings.json")) hasItsMagic = true
+                            if (entryName.contains("libmonochrome.so") || entryName.contains("libhermes.so") || entryName.contains("libreactnativejni.so") ||
+                                entryName.contains("assets/www/index.html") || entryName.contains("assets/public/index.html") || entryName.contains("assets/capacitor.config.json") ||
+                                entryName.contains("assets/cordova.js") || entryName.contains("assets/index.android.bundle") || entryName.contains("libwebviewchromium.so")) {
+                                hasWeb = true
+                            }
+                            if (entryName.contains("libcocos2d")) hasCocos = true
+
+                            // Se já encontrou uma engine de ponta prioritária, encerra a varredura antecipadamente
+                            if (hasUnity || hasUnreal || hasGodot || hasItsMagic) break
+                        }
+
+                        if (hasUnity) return EngineType.UNITY
+                        if (hasUnreal) return EngineType.UNREAL
+                        if (hasGodot) return EngineType.GODOT
+                        if (hasItsMagic) return EngineType.ITSMAGIC
+                        if (hasWeb) return EngineType.WEBVIEW
+                        if (hasCocos) return EngineType.COCOS
+                        if (hasClassesDex) return EngineType.ANDROID_STUDIO
+                    }
+                } catch (_: Exception) {
+                    // Fallback para nativeLibraryDir se ZipFile não puder ser lido
+                }
+            }
+
+            // 2. Inspeciona o diretório de bibliotecas nativas descompactadas
             val nativeDir = File(appInfo.nativeLibraryDir)
             if (nativeDir.exists() && nativeDir.isDirectory) {
                 val libs = nativeDir.list() ?: emptyArray()
                 if (libs.any { it.contains("itsmagic", ignoreCase = true) }) return EngineType.ITSMAGIC
                 if (libs.any { it.contains("godot", ignoreCase = true) }) return EngineType.GODOT
-                if (libs.any { it.contains("unity", ignoreCase = true) }) return EngineType.UNITY
+                if (libs.any { it.contains("unity", ignoreCase = true) || it.contains("il2cpp", ignoreCase = true) }) return EngineType.UNITY
                 if (libs.any { it.contains("UE4", ignoreCase = true) || it.contains("Unreal", ignoreCase = true) }) return EngineType.UNREAL
+                if (libs.any { it.contains("cocos2d", ignoreCase = true) }) return EngineType.COCOS
+                if (libs.any { it.contains("webview", ignoreCase = true) || it.contains("monochrome", ignoreCase = true) || it.contains("v8", ignoreCase = true) || it.contains("node", ignoreCase = true) || it.contains("hermes", ignoreCase = true) || it.contains("jsc", ignoreCase = true) }) {
+                    return EngineType.WEBVIEW
+                }
             }
-            // Verifica pacotes .pck típicos do Godot
+
+            // 3. Verifica diretórios app_webview no /data/data/$packageName
+            val webViewDataDir = File("/data/data/$packageName/app_webview")
+            if (webViewDataDir.exists()) {
+                return EngineType.WEBVIEW
+            }
+
+            // 4. Verifica pacotes .pck típicos do Godot no armazenamento
             val dataDir = File("/sdcard/Android/data/$packageName/files")
             if (dataDir.exists() && dataDir.listFiles()?.any { it.extension.equals("pck", ignoreCase = true) } == true) {
                 return EngineType.GODOT
             }
-            // Verifica arquivos típicos da ITsMagic Engine
+
+            // 5. Verifica arquivos típicos da ITsMagic Engine
             if (dataDir.exists() && dataDir.walkTopDown().maxDepth(3).any {
                     it.name.contains("itsmagic", ignoreCase = true) || it.name.equals("engine_settings.json", ignoreCase = true)
                 }) {
                 return EngineType.ITSMAGIC
             }
-            EngineType.GENERIC
+
+            // 6. Inspeciona assets do contexto do pacote (para HTML5 / Cordova / Capacitor / React)
+            try {
+                val assets = context.createPackageContext(packageName, 0).assets.list("") ?: emptyArray()
+                if (assets.any { it.contains("www", ignoreCase = true) || it.contains("index.html", ignoreCase = true) || it.contains("capacitor", ignoreCase = true) || it.contains("cordova", ignoreCase = true) || it.contains("phaser", ignoreCase = true) }) {
+                    return EngineType.WEBVIEW
+                }
+            } catch (_: Exception) {}
+
+            // 7. Se o pacote é válido no Android mas não utiliza engine externa: é Nativo Android Studio
+            EngineType.ANDROID_STUDIO
         } catch (e: Exception) {
-            EngineType.GENERIC
+            // Se falhou ao inspecionar o pacote (não instalado, corrompido ou erro de leitura)
+            EngineType.UNKNOWN
         }
     }
 
@@ -76,7 +165,11 @@ object GfxTools {
             reducePolygons = prefs.getBoolean("${packageName}_polygons", false),
             disableWaterEffects = prefs.getBoolean("${packageName}_water", false),
             disableExplosions = prefs.getBoolean("${packageName}_explosions", false),
-            muteAudio = prefs.getBoolean("${packageName}_mute", false)
+            muteAudio = prefs.getBoolean("${packageName}_mute", false),
+            astcTextureCompression = prefs.getBoolean("${packageName}_astc_tex", false),
+            forceMipmapping = prefs.getBoolean("${packageName}_mipmapping", false),
+            webViewGpuBoost = prefs.getBoolean("${packageName}_webview_gpu", false),
+            cleanWebViewCache = prefs.getBoolean("${packageName}_webview_clean", false)
         )
     }
 
@@ -92,6 +185,10 @@ object GfxTools {
             .putBoolean("${packageName}_water", config.disableWaterEffects)
             .putBoolean("${packageName}_explosions", config.disableExplosions)
             .putBoolean("${packageName}_mute", config.muteAudio)
+            .putBoolean("${packageName}_astc_tex", config.astcTextureCompression)
+            .putBoolean("${packageName}_mipmapping", config.forceMipmapping)
+            .putBoolean("${packageName}_webview_gpu", config.webViewGpuBoost)
+            .putBoolean("${packageName}_webview_clean", config.cleanWebViewCache)
             .apply()
     }
 
@@ -107,6 +204,10 @@ object GfxTools {
             .remove("${packageName}_water")
             .remove("${packageName}_explosions")
             .remove("${packageName}_mute")
+            .remove("${packageName}_astc_tex")
+            .remove("${packageName}_mipmapping")
+            .remove("${packageName}_webview_gpu")
+            .remove("${packageName}_webview_clean")
             .apply()
 
         // Restaura modo padrão no Android Game Mode
@@ -161,6 +262,18 @@ object GfxTools {
                 ShizukuHelper.executeCommand(cmdMute)
                 results.add("Unity: Áudio e efeitos sonoros desativados no PlayerPrefs")
             }
+
+            if (config.astcTextureCompression || config.extremePotatoMode) {
+                val cmdTex = "sed -i 's/<map>/<map><int name=\"QualitySettings.masterTextureLimit\" value=\"1\" \\/><int name=\"QualitySettings.anisotropicFiltering\" value=\"0\" \\/><int name=\"TextureCompressionASTC\" value=\"1\" \\/>/g' $unityPrefsFile"
+                ShizukuHelper.executeCommand(cmdTex)
+                results.add("Unity: Compactação de texturas ASTC (masterTextureLimit=1, economia de VRAM)")
+            }
+
+            if (config.forceMipmapping) {
+                val cmdMip = "sed -i 's/<map>/<map><int name=\"QualitySettings.globalTextureMipmapLimit\" value=\"1\" \\/><int name=\"TextureMipBias\" value=\"1\" \\/>/g' $unityPrefsFile"
+                ShizukuHelper.executeCommand(cmdMip)
+                results.add("Unity: Mipmapping gerado e filtragem linear forçada")
+            }
         } else if (engine == EngineType.UNREAL) {
             // Otimizações para Unreal Engine (UserCustom.ini / Scalability)
             val iniLines = mutableListOf<String>()
@@ -181,6 +294,17 @@ object GfxTools {
             if (config.disableExplosions || config.extremePotatoMode) {
                 iniLines.add("+CVars=r.ParticleLODBias=10")
                 iniLines.add("+CVars=r.Emitter.FastPath=1")
+            }
+            if (config.astcTextureCompression || config.extremePotatoMode) {
+                iniLines.add("+CVars=r.MipMapLODBias=2")
+                iniLines.add("+CVars=r.Streaming.PoolSize=256")
+                iniLines.add("+CVars=r.TextureStreaming=1")
+                results.add("Unreal: ASTC Streaming PoolSize 256MB e LODBias=2")
+            }
+            if (config.forceMipmapping) {
+                iniLines.add("+CVars=r.MaxAnisotropy=0")
+                iniLines.add("+CVars=r.Streaming.MipBias=1")
+                results.add("Unreal: Mipmapping forçado e anisotropia zerada")
             }
             results.add("Unreal: Comandos de escalabilidade gráfica injetados")
         } else if (engine == EngineType.GODOT) {
@@ -221,6 +345,17 @@ object GfxTools {
             if (config.disableExplosions || config.extremePotatoMode) {
                 overrideLines.add("quality/particles/amount_ratio=0.1")
                 overrideLines.add("textures/default_filters/anisotropic_filtering_level=0")
+            }
+
+            if (config.astcTextureCompression || config.extremePotatoMode) {
+                overrideLines.add("textures/vram_compression/import_etc2_astc=true")
+                overrideLines.add("textures/decals/filter=0")
+                results.add("Godot: Compactação ASTC de texturas habilitada")
+            }
+
+            if (config.forceMipmapping) {
+                overrideLines.add("textures/default_filters/use_nearest_mipmap_filter=true")
+                results.add("Godot: Filtro de Mipmaps ativado para performance")
             }
 
             if (config.extremePotatoMode) {
@@ -322,6 +457,31 @@ object GfxTools {
             ShizukuHelper.executeCommand("setprop debug.egl.force_msaa 0")
             ShizukuHelper.executeCommand("setprop debug.hwui.disable_draw_defer 1")
             results.add("GPU: MSAA forçado em 0x e pipeline de hardware simplificado")
+        }
+
+        // 5. Otimizações para Jogos Web e Baseados em WebView (HTML5, React, Canvas 2D, WebGL)
+        if (engine == EngineType.WEBVIEW || config.webViewGpuBoost) {
+            val webViewFlags = "_ --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --force-gpu-mem-available-mb=512 --disable-gpu-vsync --disable-background-timer-throttling"
+            ShizukuHelper.executeCommand("mkdir -p /data/local/tmp")
+            ShizukuHelper.executeCommand("echo \"$webViewFlags\" > /data/local/tmp/webview-command-line")
+            ShizukuHelper.executeCommand("chmod 755 /data/local/tmp/webview-command-line")
+            results.add("WebView: Flags de GPU Rasterization e Zero-Copy ativadas")
+
+            ShizukuHelper.executeCommand("setprop debug.hwui.renderer skiagl")
+            ShizukuHelper.executeCommand("setprop debug.hwui.render_ahead 1")
+            ShizukuHelper.executeCommand("setprop debug.hwui.texture_cache_size 72")
+            ShizukuHelper.executeCommand("setprop debug.hwui.texture_cache_flushrate 0.8")
+            results.add("HWUI: Skia GL e cache de texturas do WebView otimizados")
+
+            val boostCmd = "for p in \$(pgrep -f 'sandboxed_process'); do renice -n -20 -p \$p 2>/dev/null; echo -1000 > /proc/\$p/oom_score_adj 2>/dev/null; done"
+            ShizukuHelper.executeCommand(boostCmd)
+            results.add("WebView: Renderizador :sandboxed_process priorizado (Nice -20 / OOM -1000)")
+
+            if (config.cleanWebViewCache) {
+                ShizukuHelper.executeCommand("rm -rf /data/data/$packageName/app_webview/Default/GPUCache/*")
+                ShizukuHelper.executeCommand("rm -rf /data/data/$packageName/app_webview/ShaderCache/*")
+                results.add("WebView: Shaders antigos do GPUCache limpos")
+            }
         }
 
         return if (results.isNotEmpty()) results.joinToString("\n") else "Nenhum ajuste gráfico adicional ativado."

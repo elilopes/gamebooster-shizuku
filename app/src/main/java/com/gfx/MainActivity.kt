@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
@@ -116,22 +120,8 @@ class MainActivity : ComponentActivity() {
 
     private fun preventAppKillInBackground() {
         try {
+            GameForegroundService.keepAliveActive = true
             GameForegroundService.startService(this)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-                val pkgName = packageName
-                if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(pkgName)) {
-                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$pkgName")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    try {
-                        startActivity(intent)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
             android.util.Log.d("AppKeepAlive", "Serviço de permanência em segundo plano acionado com sucesso.")
         } catch (e: Exception) {
             android.util.Log.e("AppKeepAlive", "Erro ao configurar permanência em segundo plano: ${e.message}")
@@ -257,7 +247,8 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
         stringResource(id = R.string.tab_background),
         stringResource(id = R.string.tab_boost_settings),
         stringResource(id = R.string.tab_backup_app),
-        stringResource(id = R.string.tab_scripts)
+        stringResource(id = R.string.tab_scripts),
+        stringResource(id = R.string.tab_setedit)
     )
 
     val tabs = if (thermalMonitorEnabled) {
@@ -479,6 +470,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_backup_app) -> BackupAppTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_scripts) -> ScriptsTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_setedit) -> SetEditTab(viewModel)
             else -> GameListTab(viewModel)
         }
     }
@@ -689,13 +681,35 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
 @Composable
 fun LogsDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
     val logs by ShizukuHelper.logEntries.collectAsState()
+    val crashHistory by CrashReporterHelper.crashHistory.collectAsState()
+    val lastCrashAlert by CrashReporterHelper.lastCrashAlert.collectAsState()
+
+    var selectedTab by remember { mutableStateOf(0) }
+    var systemLogcat by remember { mutableStateOf<String?>(null) }
+    var isLoadingLogcat by remember { mutableStateOf(false) }
+
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
+        if (logs.isNotEmpty() && selectedTab == 0) {
             listState.animateScrollToItem(logs.size - 1)
+        }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1 && systemLogcat == null) {
+            isLoadingLogcat = true
+            scope.launch(Dispatchers.IO) {
+                val captured = CrashReporterHelper.captureLogcat(120)
+                withContext(Dispatchers.Main) {
+                    systemLogcat = captured
+                    isLoadingLogcat = false
+                }
+            }
         }
     }
 
@@ -718,95 +732,268 @@ fun LogsDialog(onDismiss: () -> Unit) {
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Barra de botões de verificação direta
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            ShizukuHelper.isShizukuAvailable()
-                        },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(34.dp)
+                // Alerta caso tenha ocorrido um crash/force close recente
+                if (!lastCrashAlert.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
                     ) {
-                        Text(
-                            text = stringResource(id = R.string.logs_check_available),
-                            fontSize = 11.sp
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = {
-                            ShizukuHelper.isShizukuInstalled(context)
-                        },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.logs_check_installed),
-                            fontSize = 11.sp
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = {
-                            ShizukuHelper.hasPermission(context)
-                        },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.logs_check_permission),
-                            fontSize = 11.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(id = R.string.crash_detected_banner),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Área do console de logs
-                Card(
+                // Abas de navegação (Console Shizuku, Logcat, Falhas)
+                TabRow(
+                    selectedTabIndex = selectedTab,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-                    shape = RoundedCornerShape(8.dp)
+                        .padding(bottom = 8.dp)
                 ) {
-                    if (logs.isEmpty()) {
-                        Box(
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text(stringResource(id = R.string.logs_tab_console), fontSize = 11.sp) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text(stringResource(id = R.string.logs_tab_logcat), fontSize = 11.sp) }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text(stringResource(id = R.string.logs_tab_crashes), fontSize = 11.sp) }
+                    )
+                }
+
+                when (selectedTab) {
+                    0 -> {
+                        // ABA 0: CONSOLE SHIZUKU / APP LOGS
+                        Row(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.isShizukuAvailable() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_available), fontSize = 10.sp)
+                            }
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.isShizukuInstalled(context) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_installed), fontSize = 10.sp)
+                            }
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.hasPermission(context, dispatchFeedback = true) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_permission), fontSize = 10.sp)
+                            }
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.isShizukuRunningProvider(context) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_provider), fontSize = 10.sp)
+                            }
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.isShizukuBinderAlive() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_reflection), fontSize = 10.sp)
+                            }
+                            FilledTonalButton(
+                                onClick = { ShizukuHelper.isShizukuProcessRunning() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(text = stringResource(id = R.string.logs_check_process), fontSize = 10.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            if (logs.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(id = R.string.logs_empty),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp)
+                                ) {
+                                    items(logs) { entry ->
+                                        val textColor = when {
+                                            entry.contains("[ERRO]") -> Color(0xFFFF6B68)
+                                            entry.contains("concedida") || entry.contains("OK") || entry.contains("sucesso") -> Color(0xFF81C784)
+                                            else -> Color(0xFFE0E0E0)
+                                        }
+                                        Text(
+                                            text = entry,
+                                            fontSize = 11.sp,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            color = textColor,
+                                            modifier = Modifier.padding(vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    1 -> {
+                        // ABA 1: LOGCAT DO SISTEMA
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = stringResource(id = R.string.logs_empty),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                text = "Logcat (Últimas 120 linhas)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                    } else {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp)
-                        ) {
-                            items(logs) { entry ->
-                                val textColor = when {
-                                    entry.contains("[ERRO]") -> Color(0xFFFF6B68)
-                                    entry.contains("concedida") || entry.contains("OK") || entry.contains("sucesso") -> Color(0xFF81C784)
-                                    else -> Color(0xFFE0E0E0)
-                                }
-                                Text(
-                                    text = entry,
-                                    fontSize = 11.sp,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    color = textColor,
-                                    modifier = Modifier.padding(vertical = 1.dp)
+                            FilledTonalButton(
+                                onClick = {
+                                    isLoadingLogcat = true
+                                    scope.launch(Dispatchers.IO) {
+                                        val captured = CrashReporterHelper.captureLogcat(120)
+                                        withContext(Dispatchers.Main) {
+                                            systemLogcat = captured
+                                            isLoadingLogcat = false
+                                        }
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(id = R.string.logs_refresh_logcat), fontSize = 10.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            if (isLoadingLogcat) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                }
+                            } else {
+                                val textContent = systemLogcat ?: "Toque em Atualizar Logcat para inspecionar registros."
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = textContent,
+                                        fontSize = 10.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        color = Color(0xFFD4D4D4)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    2 -> {
+                        // ABA 2: HISTÓRICO DE FALHAS E CRASHES
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            if (crashHistory.isEmpty() && lastCrashAlert.isNullOrBlank()) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = stringResource(id = R.string.no_crashes_found),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                val allCrashes = buildList {
+                                    lastCrashAlert?.let { add("--- ÚLTIMO CRASH SALVO ---\n$it") }
+                                    addAll(crashHistory)
+                                }
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp)
+                                ) {
+                                    items(allCrashes) { item ->
+                                        Text(
+                                            text = item,
+                                            fontSize = 10.sp,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            color = Color(0xFFFF8A80),
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        )
+                                        HorizontalDivider(color = Color(0xFF333333))
+                                    }
+                                }
                             }
                         }
                     }
@@ -814,11 +1001,39 @@ fun LogsDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Botão para gerar Bug Report completo
+                FilledTonalButton(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            val report = CrashReporterHelper.generateFullBugReport(context)
+                            withContext(Dispatchers.Main) {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(report))
+                                Toast.makeText(context, context.getString(R.string.bugreport_generated_toast), Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(stringResource(id = R.string.logs_generate_bugreport), fontSize = 11.sp)
+                }
+
+                // Botão para copiar conteúdo da aba atual
                 TextButton(
                     onClick = {
-                        if (logs.isNotEmpty()) {
-                            val textToCopy = logs.joinToString("\n")
+                        val textToCopy = when (selectedTab) {
+                            0 -> logs.joinToString("\n")
+                            1 -> systemLogcat ?: ""
+                            2 -> crashHistory.joinToString("\n")
+                            else -> ""
+                        }
+                        if (textToCopy.isNotBlank()) {
                             clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(textToCopy))
                             Toast.makeText(context, context.getString(R.string.logs_copied_toast), Toast.LENGTH_SHORT).show()
                         }
@@ -826,13 +1041,20 @@ fun LogsDialog(onDismiss: () -> Unit) {
                 ) {
                     Text(stringResource(id = R.string.logs_copy))
                 }
+
+                // Botão para limpar conteúdo
                 TextButton(
                     onClick = {
-                        ShizukuHelper.clearLogs()
+                        when (selectedTab) {
+                            0 -> ShizukuHelper.clearLogs()
+                            1 -> systemLogcat = null
+                            2 -> CrashReporterHelper.clearCrashReports(context)
+                        }
                     }
                 ) {
                     Text(stringResource(id = R.string.logs_clear))
                 }
+
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(id = R.string.logs_close))
                 }
@@ -989,6 +1211,9 @@ fun GameListTab(viewModel: GameViewModel) {
     var compressZip by remember { mutableStateOf(true) }
     var backupResultMsg by remember { mutableStateOf<String?>(null) }
 
+    var showActionsDialog by remember { mutableStateOf(false) }
+    var actionsTargetGame by remember { mutableStateOf<GameApp?>(null) }
+
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         item {
             Card(
@@ -1139,7 +1364,39 @@ fun GameListTab(viewModel: GameViewModel) {
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
+                    // Badge da Engine / Modo Web / Origem
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(game.engine.badgeColorHex).copy(alpha = 0.16f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(game.engine.badgeColorHex).copy(alpha = 0.5f)),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = game.engine.iconEmoji,
+                                    fontSize = 10.sp
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = game.engine.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(game.engine.badgeColorHex)
+                                )
+                            }
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = MaterialTheme.shapes.extraSmall,
@@ -1193,101 +1450,154 @@ fun GameListTab(viewModel: GameViewModel) {
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
-                    val cardBtnStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp)
-                    val cardBtnPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                     Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
                             onClick = {
-                                selectedGame = game
-                                customResolutionInput = game.profile?.resolution ?: "1280x720"
-                                customDensityInput = (game.profile?.density ?: viewModel.getNativeDensity()).toString()
-                                showDialog = true
+                                actionsTargetGame = game
+                                showActionsDialog = true
                             },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.game_resolution_btn), style = cardBtnStyle)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                selectedGfxGame = game
-                                currentGfxConfig = viewModel.getGfxConfig(game.packageName)
-                                showGfxDialog = true
-                            },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.gfx_tuner_btn), style = cardBtnStyle)
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.cleanGameCache(game.packageName) { _, msg -> compactResultMsg = msg } },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.cleanup_btn), style = cardBtnStyle)
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.moveObbToSd(game.packageName) { _, msg -> compactResultMsg = msg } },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.move_obb_btn), style = cardBtnStyle)
-                        }
-
-
-                        OutlinedButton(
-                            onClick = {
-                                integrityScanResult = viewModel.checkGameIntegritySystem(game.packageName)
-                            },
-                            contentPadding = cardBtnPadding
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Security,
+                                imageVector = Icons.Default.MoreVert,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(stringResource(id = R.string.game_integrity_btn), style = cardBtnStyle)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(id = R.string.game_actions_btn), style = MaterialTheme.typography.labelMedium)
                         }
 
-                        OutlinedButton(
-                            onClick = {
-                                backupTargetGame = game
-                                showBackupDialog = true
-                            },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Text(stringResource(id = R.string.backup_btn), style = cardBtnStyle)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                adScanResult = viewModel.scanGameAds(game.packageName)
-                            },
-                            contentPadding = cardBtnPadding
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Security,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(stringResource(id = R.string.game_verify_ads), style = cardBtnStyle)
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         Button(
                             onClick = { viewModel.launchGame(game.packageName) },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                         ) {
-                            Text(stringResource(id = R.string.game_launch), style = cardBtnStyle)
+                            Text(stringResource(id = R.string.game_launch), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showActionsDialog && actionsTargetGame != null) {
+        val targetGame = actionsTargetGame!!
+        AlertDialog(
+            onDismissRequest = { showActionsDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${stringResource(id = R.string.game_actions_title)}: ${targetGame.name}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    IconButton(onClick = { showActionsDialog = false }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            selectedGame = targetGame
+                            customResolutionInput = targetGame.profile?.resolution ?: "1280x720"
+                            customDensityInput = (targetGame.profile?.density ?: viewModel.getNativeDensity()).toString()
+                            showDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.game_resolution_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            selectedGfxGame = targetGame
+                            currentGfxConfig = viewModel.getGfxConfig(targetGame.packageName)
+                            showGfxDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.gfx_tuner_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            viewModel.cleanGameCache(targetGame.packageName) { _, msg -> compactResultMsg = msg }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.cleanup_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            viewModel.moveObbToSd(targetGame.packageName) { _, msg -> compactResultMsg = msg }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.move_obb_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            integrityScanResult = viewModel.checkGameIntegritySystem(targetGame.packageName)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(id = R.string.game_integrity_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            backupTargetGame = targetGame
+                            showBackupDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.backup_btn))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            adScanResult = viewModel.scanGameAds(targetGame.packageName)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(id = R.string.game_verify_ads))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showActionsDialog = false }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
     }
 
     if (showManualAddDialog) {
@@ -1403,6 +1713,19 @@ fun GameListTab(viewModel: GameViewModel) {
                                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                         )
                                                     }
+                                                }
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Surface(
+                                                    shape = MaterialTheme.shapes.extraSmall,
+                                                    color = Color(appItem.engine.badgeColorHex).copy(alpha = 0.16f)
+                                                ) {
+                                                    Text(
+                                                        text = "${appItem.engine.iconEmoji} ${appItem.engine.shortName}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(appItem.engine.badgeColorHex),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
                                                 }
                                             }
                                             Text(
@@ -1616,7 +1939,11 @@ fun GameListTab(viewModel: GameViewModel) {
             GfxTools.EngineType.GODOT -> "Godot Engine (override.cfg)"
             GfxTools.EngineType.ITSMAGIC -> "ITsMagic Engine (engine_settings.json)"
             GfxTools.EngineType.UNREAL -> "Unreal Engine"
+            GfxTools.EngineType.WEBVIEW -> "Jogos Web / HTML5 (WebView, React, Canvas)"
+            GfxTools.EngineType.ANDROID_STUDIO -> "Android Studio (Nativo Java/Kotlin)"
+            GfxTools.EngineType.COCOS -> "Cocos2d-x"
             GfxTools.EngineType.GENERIC -> "Genérico (Android Game Mode)"
+            GfxTools.EngineType.UNKNOWN -> "Origem Desconhecida"
         }
 
         AlertDialog(
@@ -1752,6 +2079,54 @@ fun GameListTab(viewModel: GameViewModel) {
                                 onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(muteAudio = it) }
                             )
                             Text(stringResource(id = R.string.gfx_mute_audio), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Compactação ASTC / ETC2 de Texturas
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.astcTextureCompression,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(astcTextureCompression = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_astc_texture_compression), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Forçar Geração de Mipmaps
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.forceMipmapping,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(forceMipmapping = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_force_mipmapping), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Aceleração WebGL / WebView
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.webViewGpuBoost,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(webViewGpuBoost = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_webview_gpu_boost), style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // Limpeza de GPUCache do WebView
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = currentGfxConfig.cleanWebViewCache,
+                                onCheckedChange = { currentGfxConfig = currentGfxConfig.copy(cleanWebViewCache = it) }
+                            )
+                            Text(stringResource(id = R.string.gfx_webview_clean_cache), style = MaterialTheme.typography.bodyMedium)
                         }
 
                         Card(
@@ -2498,6 +2873,12 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     val forceDeepSleepCache by viewModel.forceDeepSleepCache.collectAsState()
     val forceMaxCpu by viewModel.forceMaxCpu.collectAsState()
     val forceMaxGpu by viewModel.forceMaxGpu.collectAsState()
+    val nativeGameMode by viewModel.nativeGameMode.collectAsState()
+    val blockNotificationsGamer by viewModel.blockNotificationsGamer.collectAsState()
+    val reduceLoggerBuffer by viewModel.reduceLoggerBuffer.collectAsState()
+    val disablePrintSpooler by viewModel.disablePrintSpooler.collectAsState()
+    val forceSystemGraphicsDriver by viewModel.forceSystemGraphicsDriver.collectAsState()
+    val webViewGameBoost by viewModel.webViewGameBoost.collectAsState()
 
     var showInfoDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showVmDialog by remember { mutableStateOf(false) }
@@ -2516,6 +2897,55 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
         }
+
+        SettingItem(
+            title = stringResource(id = R.string.boost_native_game_mode_title),
+            checked = nativeGameMode,
+            onCheckedChange = { viewModel.toggleNativeGameMode(it) },
+            titleRes = R.string.boost_native_game_mode_title,
+            descRes = R.string.boost_native_game_mode_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_system_driver_title),
+            checked = forceSystemGraphicsDriver,
+            onCheckedChange = { viewModel.toggleForceSystemGraphicsDriver(it) },
+            titleRes = R.string.boost_system_driver_title,
+            descRes = R.string.boost_system_driver_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_webview_title),
+            checked = webViewGameBoost,
+            onCheckedChange = { viewModel.toggleWebViewGameBoost(it) },
+            titleRes = R.string.boost_webview_title,
+            descRes = R.string.boost_webview_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_block_notifications_title),
+            checked = blockNotificationsGamer,
+            onCheckedChange = { viewModel.toggleBlockNotificationsGamer(it) },
+            titleRes = R.string.boost_block_notifications_title,
+            descRes = R.string.boost_block_notifications_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_reduce_logger_title),
+            checked = reduceLoggerBuffer,
+            onCheckedChange = { viewModel.toggleReduceLoggerBuffer(it) },
+            titleRes = R.string.boost_reduce_logger_title,
+            descRes = R.string.boost_reduce_logger_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_disable_print_spooler_title),
+            checked = disablePrintSpooler,
+            onCheckedChange = { viewModel.toggleDisablePrintSpooler(it) },
+            titleRes = R.string.boost_disable_print_spooler_title,
+            descRes = R.string.boost_disable_print_spooler_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
 
         SettingItem(
             title = stringResource(id = R.string.boost_max_cpu_title),
@@ -2734,171 +3164,3 @@ fun SettingItem(
     )
 }
 
-@Composable
-fun ScriptsTab(viewModel: GameViewModel) {
-    var scriptContent by remember { mutableStateOf("# Exemplo de Script / Game Tuner Shell\n# wm size 720x1280\n# settings put global animator_duration_scale 0.0") }
-    var isRunning by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-    val commandLog by ShellFunctions.commandLog.collectAsState()
-    val scrollState = androidx.compose.foundation.rememberScrollState()
-
-    LaunchedEffect(commandLog.size) {
-        if (commandLog.isNotEmpty()) {
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-    }
-
-    Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-        Text(
-            text = stringResource(id = R.string.scripts_tab_title),
-            style = MaterialTheme.typography.titleLarge
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = stringResource(id = R.string.scripts_tab_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = scriptContent,
-            onValueChange = { scriptContent = it },
-            label = { Text(stringResource(id = R.string.scripts_input_label)) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
-            textStyle = MaterialTheme.typography.bodySmall
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                if (scriptContent.isNotBlank()) {
-                    isRunning = true
-                    viewModel.runCustomScript(scriptContent) { _ ->
-                        isRunning = false
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isRunning
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                if (isRunning) stringResource(id = R.string.scripts_running)
-                else stringResource(id = R.string.scripts_run_btn)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Card do Terminal com Barra de Ações (Copiar e Limpar)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = androidx.compose.ui.graphics.Color(0xFF1E1E1E)
-            )
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Barra de cabeçalho do console
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(androidx.compose.ui.graphics.Color(0xFF2D2D2D))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.scripts_terminal_title),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = androidx.compose.ui.graphics.Color.LightGray
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Botão de Copiar Logs do Terminal
-                        IconButton(
-                            onClick = {
-                                if (commandLog.isNotEmpty()) {
-                                    val fullLog = commandLog.joinToString("\n")
-                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(fullLog))
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.scripts_copied_toast),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.scripts_empty_toast),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = stringResource(id = R.string.scripts_copy_btn),
-                                tint = androidx.compose.ui.graphics.Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        // Botão de Limpar Terminal
-                        IconButton(
-                            onClick = {
-                                ShellFunctions.clearLog()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(id = R.string.scripts_clear_btn),
-                                tint = androidx.compose.ui.graphics.Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Conteúdo do Terminal
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Color.Black)
-                        .padding(10.dp)
-                        .verticalScroll(scrollState)
-                ) {
-                    if (commandLog.isEmpty()) {
-                        Text(
-                            text = "# " + stringResource(id = R.string.scripts_empty_toast),
-                            color = androidx.compose.ui.graphics.Color.DarkGray,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    } else {
-                        Text(
-                            text = commandLog.joinToString("\n"),
-                            color = androidx.compose.ui.graphics.Color(0xFF00FF66),
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
-    }
-}

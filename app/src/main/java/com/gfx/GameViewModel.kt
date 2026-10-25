@@ -26,7 +26,8 @@ data class GameApp(
     val packageName: String,
     val name: String,
     val profile: GameProfile?,
-    val versionName: String = "1.0.0"
+    val versionName: String = "1.0.0",
+    val engine: GfxTools.EngineType = GfxTools.EngineType.UNKNOWN
 )
 
 data class BackgroundApp(
@@ -42,7 +43,8 @@ data class AppItemInfo(
     val name: String,
     val versionName: String,
     val isGame: Boolean,
-    val isAlreadyAdded: Boolean
+    val isAlreadyAdded: Boolean,
+    val engine: GfxTools.EngineType = GfxTools.EngineType.UNKNOWN
 )
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
@@ -85,6 +87,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val forceDeepSleepCache = boostSettings.forceDeepSleepCache
     val forceMaxCpu = boostSettings.forceMaxCpu
     val forceMaxGpu = boostSettings.forceMaxGpu
+    val nativeGameMode = boostSettings.nativeGameMode
+    val blockNotificationsGamer = boostSettings.blockNotificationsGamer
+    val reduceLoggerBuffer = boostSettings.reduceLoggerBuffer
+    val disablePrintSpooler = boostSettings.disablePrintSpooler
+    val forceSystemGraphicsDriver = boostSettings.forceSystemGraphicsDriver
+    val webViewGameBoost = boostSettings.webViewGameBoost
 
     val adBlockerEnabled = MutableStateFlow(false)
     val adBlockerRealtime = MutableStateFlow(false)
@@ -100,12 +108,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val inspectedImage = MutableStateFlow<ImageOptimizerHelper.ImageInfo?>(null)
     val compressedImageFile = MutableStateFlow<File?>(null)
 
+    // Custom Shell Scripts State (.sh)
+    val customScripts = MutableStateFlow<List<CustomScript>>(emptyList())
+
     val nativeResolution: String
         get() = ShellFunctions.getNativeResolution()
 
     init {
         loadGames()
         scanBackgroundApps()
+        loadCustomScripts()
     }
 
     fun toggleThermalMonitor(enabled: Boolean) {
@@ -220,7 +232,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0" } catch (e: Exception) { "1.0" }
                 val isGame = isGameApp(appInfo, pkg)
                 val isAdded = _games.value.any { it.packageName == pkg }
-                AppItemInfo(pkg, name, vName, isGame, isAdded)
+                val engine = GfxTools.detectEngine(app, pkg)
+                AppItemInfo(pkg, name, vName, isGame, isAdded, engine)
             }
         } catch (e: Exception) {
             emptyList()
@@ -265,7 +278,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     val name = resolveInfo.loadLabel(packageManager).toString()
                     val profile = profiles.find { it.packageName == pkg }
                     val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
-                    list.add(GameApp(pkg, name, profile, vName))
+                    val engine = GfxTools.detectEngine(app, pkg)
+                    list.add(GameApp(pkg, name, profile, vName, engine))
                 }
             }
 
@@ -279,7 +293,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         val name = appInfo.loadLabel(packageManager).toString()
                         val profile = profiles.find { it.packageName == pkg }
                         val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
-                        list.add(GameApp(pkg, name, profile, vName))
+                        val engine = GfxTools.detectEngine(app, pkg)
+                        list.add(GameApp(pkg, name, profile, vName, engine))
                     }
                 }
             }
@@ -292,7 +307,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         val name = appInfo.loadLabel(packageManager).toString()
                         val profile = profiles.find { it.packageName == pkg }
                         val vName = packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0"
-                        list.add(GameApp(pkg, name, profile, vName))
+                        val engine = GfxTools.detectEngine(app, pkg)
+                        list.add(GameApp(pkg, name, profile, vName, engine))
                     } catch (e: Exception) {
                         // app não encontrado
                     }
@@ -315,7 +331,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 "1.0.0"
             }
-            val newGame = GameApp(packageName, name, profile, versionName)
+            val engine = GfxTools.detectEngine(app, packageName)
+            val newGame = GameApp(packageName, name, profile, versionName, engine)
             if (_games.value.none { it.packageName == packageName }) {
                 _games.value = _games.value + newGame
             }
@@ -627,6 +644,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleForceMaxGpu(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
         boostSettings.toggleForceMaxGpu(enable, onResult)
 
+    fun toggleNativeGameMode(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleNativeGameMode(enable, onResult)
+
+    fun toggleBlockNotificationsGamer(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleBlockNotificationsGamer(enable, onResult)
+
+    fun toggleReduceLoggerBuffer(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleReduceLoggerBuffer(enable, onResult)
+
+    fun toggleDisablePrintSpooler(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleDisablePrintSpooler(enable, onResult)
+
+    fun toggleForceSystemGraphicsDriver(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleForceSystemGraphicsDriver(enable, onResult)
+
+    fun toggleWebViewGameBoost(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleWebViewGameBoost(enable, onResult)
+
     fun launchGame(packageName: String) {
         if (autoClearCache.value) {
             ShellFunctions.clearCache(packageName)
@@ -634,6 +669,45 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         if (adBlockerEnabled.value || adBlockerRealtime.value) {
             AdBlockHelper.enableAdBlocking()
+        }
+
+        if (webViewGameBoost.value || GfxTools.detectEngine(app, packageName) == GfxTools.EngineType.WEBVIEW) {
+            val webViewFlags = "_ --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --force-gpu-mem-available-mb=512 --disable-gpu-vsync --disable-background-timer-throttling"
+            ShellFunctions.executePrivileged("mkdir -p /data/local/tmp")
+            ShellFunctions.executePrivileged("echo \"$webViewFlags\" > /data/local/tmp/webview-command-line")
+            ShellFunctions.executePrivileged("chmod 755 /data/local/tmp/webview-command-line")
+            ShellFunctions.executePrivileged("setprop debug.hwui.renderer skiagl")
+            ShellFunctions.executePrivileged("setprop debug.hwui.render_ahead 1")
+
+            viewModelScope.launch(Dispatchers.IO) {
+                delay(2000)
+                ShellFunctions.executePrivileged("for p in \$(pgrep -f 'sandboxed_process'); do renice -n -20 -p \$p 2>/dev/null; echo -1000 > /proc/\$p/oom_score_adj 2>/dev/null; done")
+            }
+        }
+
+        if (nativeGameMode.value) {
+            ShellFunctions.executePrivileged("cmd game set --mode 2 $packageName")
+            ShellFunctions.executePrivileged("settings put global low_power 0")
+            ShellFunctions.executePrivileged("setprop debug.game.performance_mode 1")
+        }
+
+        if (blockNotificationsGamer.value) {
+            ShellFunctions.executePrivileged("settings put global heads_up_notifications_enabled 0")
+        }
+
+        if (reduceLoggerBuffer.value) {
+            ShellFunctions.executePrivileged("logcat -G 64K")
+            ShellFunctions.executePrivileged("setprop persist.logd.size 64K")
+        }
+
+        if (disablePrintSpooler.value) {
+            ShellFunctions.executePrivileged("pm disable-user com.android.printspooler")
+        }
+
+        if (forceSystemGraphicsDriver.value) {
+            ShellFunctions.executePrivileged("settings put global updatable_driver_all_apps 1")
+            ShellFunctions.executePrivileged("settings put global updatable_driver_production_opt_in_apps $packageName")
+            ShellFunctions.executePrivileged("setprop debug.graphics.game_default_driver 1")
         }
 
         if (disableAnimations.value) {
@@ -741,14 +815,56 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val scriptFile = File(app.cacheDir, "custom_boost_script.sh")
                 scriptFile.writeText(scriptContent)
+                scriptFile.setReadable(true, false)
+                scriptFile.setExecutable(true, false)
                 val output = ShellFunctions.executePrivileged("sh ${scriptFile.absolutePath}")
                 withContext(Dispatchers.Main) {
-                    onResult(output.ifEmpty { "Script executed successfully with no output." })
+                    onResult(output.ifEmpty { "Script executado com sucesso." })
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    onResult("Script execution error: ${e.message}")
+                    onResult("Erro na execução do script: ${e.message}")
                 }
+            }
+        }
+    }
+
+    fun loadCustomScripts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val loaded = CustomScriptManager.loadScripts(app)
+            customScripts.value = loaded
+
+            // Executa rotinas marcadas para rodar na inicialização caso haja
+            val autoRun = loaded.filter { it.runOnAppStart }
+            for (s in autoRun) {
+                CustomScriptManager.executeScript(app, s)
+            }
+        }
+    }
+
+    fun saveCustomScript(script: CustomScript) {
+        viewModelScope.launch(Dispatchers.IO) {
+            customScripts.value = CustomScriptManager.saveScript(app, script)
+        }
+    }
+
+    fun deleteCustomScript(scriptId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            customScripts.value = CustomScriptManager.deleteScript(app, scriptId)
+        }
+    }
+
+    fun resetCustomScriptsToPresets() {
+        viewModelScope.launch(Dispatchers.IO) {
+            customScripts.value = CustomScriptManager.resetToDefaults(app)
+        }
+    }
+
+    fun executeCustomScript(script: CustomScript, onResult: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val output = CustomScriptManager.executeScript(app, script)
+            withContext(Dispatchers.Main) {
+                onResult(output)
             }
         }
     }

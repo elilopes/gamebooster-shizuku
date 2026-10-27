@@ -17,6 +17,8 @@
         <package android:name="moe.shizuku.manager" />
         <package android:name="rikka.shizuku" />
         <package android:name="rikka.shizuku.manager" />
+        <provider android:authorities="moe.shizuku.privileged.api.provider.BinderProvider" />
+        <provider android:authorities="moe.shizuku.manager.provider.BinderProvider" />
         <intent>
             <action android:name="rikka.shizuku.intent.action.REQUEST_PERMISSION" />
         </intent>
@@ -157,6 +159,18 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Game performance optimization and background monitoring" />
         </service>
+        <!--
+            [PT-BR] Provedor do Shizuku para recebimento do Binder oficial quando o serviço for iniciado no dispositivo.
+            [EN]    Shizuku Provider for receiving the official Binder token when the service is started on the device.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"
+            tools:ignore="ProtectedPermissions" />
     </application>
 
 </manifest>

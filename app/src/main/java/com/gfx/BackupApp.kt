@@ -53,7 +53,27 @@ class BackupApp(
     }
 
     /**
-     * Executa o backup de um aplicativo selecionado
+     * Compacta uma pasta em arquivo ZIP usando API Java padrão (não requer binário externo ou Shizuku)
+     */
+    private fun zipFolder(sourceDir: File, zipFile: File) {
+        java.util.zip.ZipOutputStream(java.io.FileOutputStream(zipFile)).use { zos ->
+            sourceDir.walkTopDown().forEach { file ->
+                if (file.isFile) {
+                    val relativePath = file.relativeTo(sourceDir).path.replace('\\', '/')
+                    val entry = java.util.zip.ZipEntry(relativePath)
+                    zos.putNextEntry(entry)
+                    file.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+            }
+        }
+    }
+
+    /**
+     * Executa o backup de um aplicativo selecionado.
+     * Não bloqueia caso o Shizuku não esteja em execução:
+     * O APK é copiado diretamente via PackageManager e sistema de arquivos.
+     * Se privilégios (Shizuku/Root) estiverem presentes, copia também dados protegidos.
      */
     fun backupApp(
         packageName: String,
@@ -66,63 +86,138 @@ class BackupApp(
         scope.launch(Dispatchers.IO) {
             try {
                 val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
-                if (!hasPriv) {
-                    withContext(Dispatchers.Main) {
-                        onResult(false, "Permissão Shizuku ou Root necessária para realizar o backup.")
-                    }
-                    return@launch
-                }
 
                 val backupDir = getBackupDirectory()
                 val timestamp = System.currentTimeMillis()
                 val targetFolder = File(backupDir, "${packageName}_$timestamp")
                 targetFolder.mkdirs()
 
-                val commands = mutableListOf<String>()
+                var filesCopied = 0
 
+                // 1. Backup do APK: acessível diretamente via PackageManager do Android sem necessidade de Shizuku
                 if (includeApk) {
-                    val apkPathCmd = "pm path $packageName"
-                    val apkPathOut = ShellFunctions.executePrivileged(apkPathCmd).trim()
-                    val paths = apkPathOut.lines().map { it.removePrefix("package:").trim() }.filter { it.isNotEmpty() }
-                    for ((index, path) in paths.withIndex()) {
-                        val destName = if (paths.size == 1) "base.apk" else "base_$index.apk"
-                        commands.add("cp \"$path\" \"${targetFolder.absolutePath}/$destName\"")
+                    var apkCopied = false
+                    try {
+                        val pm = context.packageManager
+                        val appInfo = pm.getApplicationInfo(packageName, 0)
+                        val baseApk = File(appInfo.sourceDir)
+                        if (baseApk.exists()) {
+                            baseApk.copyTo(File(targetFolder, "base.apk"), overwrite = true)
+                            filesCopied++
+                            apkCopied = true
+                        }
+                        appInfo.splitSourceDirs?.forEachIndexed { index, splitPath ->
+                            val splitFile = File(splitPath)
+                            if (splitFile.exists()) {
+                                splitFile.copyTo(File(targetFolder, "split_$index.apk"), overwrite = true)
+                                filesCopied++
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        // Fallback caso getApplicationInfo lance exceção
+                    }
+
+                    // Fallback via comando privilegiado se disponível e o método direto não copiou
+                    if (!apkCopied && hasPriv) {
+                        try {
+                            val apkPathCmd = "pm path $packageName"
+                            val apkPathOut = ShellFunctions.executePrivileged(apkPathCmd).trim()
+                            val paths = apkPathOut.lines().map { it.removePrefix("package:").trim() }.filter { it.isNotEmpty() }
+                            for ((index, path) in paths.withIndex()) {
+                                val destName = if (paths.size == 1) "base.apk" else "base_$index.apk"
+                                ShellFunctions.executePrivileged("cp \"$path\" \"${targetFolder.absolutePath}/$destName\"")
+                                filesCopied++
+                            }
+                        } catch (e: Throwable) {
+                            // Ignora erro do shell
+                        }
                     }
                 }
 
+                // 2. Backup de OBB
                 if (includeObb) {
                     val obbDir = File("/sdcard/Android/obb/$packageName")
                     if (obbDir.exists()) {
-                        commands.add("cp -r \"${obbDir.absolutePath}\" \"${targetFolder.absolutePath}/obb\"")
+                        if (hasPriv) {
+                            ShellFunctions.executePrivileged("cp -r \"${obbDir.absolutePath}\" \"${targetFolder.absolutePath}/obb\"")
+                            filesCopied++
+                        } else {
+                            try {
+                                val destObb = File(targetFolder, "obb")
+                                obbDir.copyRecursively(destObb, overwrite = true)
+                                filesCopied++
+                            } catch (e: Throwable) {
+                                // O Android 11+ pode limitar acesso direto a /Android/obb sem SAF ou root
+                            }
+                        }
                     }
                 }
 
+                // 3. Backup de Dados (Data e Internal Data)
                 if (includeData) {
                     val sdDataDir = File("/sdcard/Android/data/$packageName")
                     if (sdDataDir.exists()) {
-                        commands.add("cp -r \"${sdDataDir.absolutePath}\" \"${targetFolder.absolutePath}/data\"")
+                        if (hasPriv) {
+                            ShellFunctions.executePrivileged("cp -r \"${sdDataDir.absolutePath}\" \"${targetFolder.absolutePath}/data\"")
+                            filesCopied++
+                        } else {
+                            try {
+                                val destData = File(targetFolder, "data")
+                                sdDataDir.copyRecursively(destData, overwrite = true)
+                                filesCopied++
+                            } catch (e: Throwable) {
+                                // ignora se não tiver acesso
+                            }
+                        }
                     }
                     val internalDataDir = File("/data/data/$packageName")
-                    if (internalDataDir.exists()) {
-                        commands.add("cp -r \"${internalDataDir.absolutePath}\" \"${targetFolder.absolutePath}/internal_data\"")
+                    if (internalDataDir.exists() && hasPriv) {
+                        try {
+                            ShellFunctions.executePrivileged("cp -r \"${internalDataDir.absolutePath}\" \"${targetFolder.absolutePath}/internal_data\"")
+                            filesCopied++
+                        } catch (e: Throwable) {
+                            // ignora se falhar
+                        }
                     }
-                }
-
-                for (cmd in commands) {
-                    ShellFunctions.executePrivileged(cmd)
                 }
 
                 var finalPath = targetFolder.absolutePath
                 if (compressZip) {
                     val zipFile = File(backupDir, "${packageName}_$timestamp.zip")
-                    val zipCmd = "cd \"${targetFolder.absolutePath}\" && zip -r \"${zipFile.absolutePath}\" ."
-                    ShellFunctions.executePrivileged(zipCmd)
-                    targetFolder.deleteRecursively()
-                    finalPath = zipFile.absolutePath
+                    var zipSuccess = false
+                    try {
+                        zipFolder(targetFolder, zipFile)
+                        targetFolder.deleteRecursively()
+                        finalPath = zipFile.absolutePath
+                        zipSuccess = true
+                    } catch (e: Throwable) {
+                        if (hasPriv) {
+                            try {
+                                val zipCmd = "cd \"${targetFolder.absolutePath}\" && zip -r \"${zipFile.absolutePath}\" ."
+                                ShellFunctions.executePrivileged(zipCmd)
+                                targetFolder.deleteRecursively()
+                                finalPath = zipFile.absolutePath
+                                zipSuccess = true
+                            } catch (e2: Throwable) {
+                                // mantém pasta original se zip falhar
+                            }
+                        }
+                    }
+                }
+
+                val savedFile = File(finalPath)
+                val hasResult = if (savedFile.isDirectory) {
+                    (savedFile.listFiles()?.size ?: 0) > 0
+                } else {
+                    savedFile.exists() && savedFile.length() > 0
                 }
 
                 withContext(Dispatchers.Main) {
-                    onResult(true, "Backup salvo com sucesso em: $finalPath")
+                    if (hasResult) {
+                        onResult(true, "Backup salvo com sucesso em: $finalPath")
+                    } else {
+                        onResult(false, "Nenhum arquivo pôde ser copiado para o backup.")
+                    }
                 }
             } catch (e: Throwable) {
                 withContext(Dispatchers.Main) {

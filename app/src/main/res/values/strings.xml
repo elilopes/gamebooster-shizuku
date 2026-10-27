@@ -1,3 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">GFX Game Booster</string>
     <string name="menu_language">Language</string>
@@ -21,6 +22,8 @@
     <string name="tab_thermal_monitor">Thermal monitor</string>
     <string name="tab_image_optimizer">Image Optimizer</string>
     <string name="tab_scripts">.sh Scripts</string>
+    <string name="tab_controller">Controller &amp; Sensitivity</string>
+    <string name="tab_fps_metrics">FPS Analytics</string>
     <string name="menu_export_hardware">Info CPU/GPU</string>
     <string name="hardware_export_success">Hardware report saved to Downloads/GameBooster_Hardware_Report.txt</string>
     <string name="hardware_export_fail">Failed to export hardware report.</string>
@@ -62,6 +65,8 @@
     <string name="scripts_empty_toast">Terminal is empty.</string>
     <string name="menu_enable_thermal">Enable Thermal monitor</string>
     <string name="menu_disable_thermal">Disable Thermal monitor</string>
+    <string name="menu_enable_fps_analytics">Enable FPS Analytics</string>
+    <string name="menu_disable_fps_analytics">Disable FPS Analytics</string>
     <string name="thermal_monitor_warning">Optional feature: Active polling is running. You can disable this tab from the menu anytime to save RAM and CPU resources.</string>
     <string name="thermal_monitor_header">Device Temperature</string>
     <string name="auto_memory_release_title">Auto Memory Release</string>
@@ -256,4 +261,82 @@
     <string name="bugreport_generated_toast">Full Bug Report copied to clipboard!</string>
     <string name="crash_detected_banner">A previous app crash was intercepted and saved for analysis.</string>
     <string name="no_crashes_found">No crashes or force-close events recorded.</string>
+    <string name="game_list_guidance">The user can manually add each game to configure or click the auto-scan button to add all games automatically.</string>
+    <string name="auto_scan_starting">Starting auto-scan…</string>
+    <string name="checking_shizuku_installed">Checking if Shizuku is installed…</string>
+    <string name="shizuku_installed_running">Shizuku is installed and running.</string>
+    <string name="shizuku_installed_not_running">Shizuku is installed, but the service is not started on the phone. Open Shizuku to start it.</string>
+    <string name="shizuku_not_installed">Shizuku is not installed on the device.</string>
+    <string name="shizuku_running_authorized">Shizuku is running and authorized!</string>
+    <string name="shizuku_request_sent">Permission request sent to Shizuku.</string>
+    <string name="shizuku_btn_start_service">Start Shizuku Service</string>
+    <string name="shizuku_btn_authorize">Authorize Shizuku</string>
+    <string name="shizuku_btn_active">Shizuku Active</string>
+    <string name="shizuku_btn_verify">Check Shizuku</string>
+
+    
+    <string name="privilege_diagnostic_title">Root &amp; Shizuku Diagnostic</string>
+    <string name="privilege_diagnostic_subtitle">Interactive diagnostic tests for root and Shizuku privileges.</string>
+    <string name="privilege_diagnostic_run_all">Run All Tests</string>
+    <string name="privilege_diagnostic_console">Response Console:</string>
+    <string name="privilege_diagnostic_copy">Copy</string>
+    <string name="privilege_diagnostic_copied_toast">Response copied to clipboard!</string>
+    <string name="privilege_diagnostic_not_run">No tests executed yet.\nTap one of the buttons above to run verification and see commands and responses.</string>
+    <string name="privilege_diagnostic_running">Running test: %s</string>
+    <string name="privilege_diagnostic_success_status">SUCCESS / ACTIVE</string>
+    <string name="privilege_diagnostic_fail_status">FAILURE / INACTIVE</string>
+    <string name="privilege_diagnostic_command_api">&gt; Command/API: %s</string>
+    <string name="privilege_diagnostic_close">Close</string>
+
+    <string name="shizuku_test_1">1. Binder Provider</string>
+    <string name="shizuku_test_2">2. Manager App</string>
+    <string name="shizuku_test_3">3. Shizuku API</string>
+    <string name="shizuku_test_4">4. Shizuku.getVersion()</string>
+    <string name="shizuku_test_5">5. Shizuku.getUid()</string>
+    <string name="shizuku_test_6">6. pgrep/pidof</string>
+    <string name="shizuku_test_7">7. ps grep</string>
+    <string name="shizuku_test_8">8. which su</string>
+    <string name="shizuku_test_9">9. su -c id</string>
+    <string name="shizuku_test_10">10. libsu Shell</string>
+    <string name="shizuku_test_11">11. Root Managers</string>
+
+    
+    <string name="scripts_add_new">New Function</string>
+    <string name="scripts_restore_defaults">Restore Defaults</string>
+    <string name="scripts_restore_defaults_toast">Default presets restored!</string>
+    <string name="scripts_search_placeholder">Search scripts and functions…</string>
+    <string name="scripts_search">Search</string>
+    <string name="scripts_clear">Clear</string>
+    <string name="scripts_category_all">All (%d)</string>
+    <string name="scripts_executed_toast">Executed: %s</string>
+    <string name="scripts_removed_toast">Script removed</string>
+    <string name="scripts_log_copied_toast">Log copied!</string>
+    <string name="scripts_copy">Copy</string>
+    <string name="scripts_terminal_empty"># No commands executed recently.\n# Run a script or type a command below.</string>
+    <string name="scripts_quick_command_hint">Quick command (e.g. pm trim-caches 100M)</string>
+    <string name="scripts_run">Run</string>
+    <string name="scripts_saved_toast">Function \'%s\' saved!</string>
+    <string name="scripts_badge_shizuku">🛡️ Shizuku</string>
+    <string name="scripts_badge_shell">🐚 Shell</string>
+    <string name="scripts_badge_auto">🚀 Auto</string>
+    <string name="scripts_hide_details">Hide details</string>
+    <string name="scripts_expand_details">Expand details</string>
+    <string name="scripts_shell_code_label">Shell Code (.sh):</string>
+    <string name="scripts_copy_code">Copy Code</string>
+    <string name="scripts_edit">Edit</string>
+    <string name="scripts_delete">Delete</string>
+    <string name="scripts_run_now">Run Now</string>
+    <string name="scripts_add_title">Add New Function / Script</string>
+    <string name="scripts_edit_title">Edit Function</string>
+    <string name="scripts_name_label">Function Name (e.g. 120Hz Mode)</string>
+    <string name="scripts_desc_label">Description of what the function does</string>
+    <string name="scripts_category_label">Category:</string>
+    <string name="scripts_quick_commands_label">Quick Commands:</string>
+    <string name="scripts_shell_commands_header">Shell Commands (.sh)</string>
+    <string name="scripts_privileges_title">Shizuku / Root Privileges</string>
+    <string name="scripts_privileges_desc">Required for system commands like setprop and pm</string>
+    <string name="scripts_run_start_title">Run on App Start</string>
+    <string name="scripts_run_start_desc">Runs this script automatically when Game Booster opens</string>
+    <string name="scripts_save_btn">Save Function</string>
+    <string name="scripts_cancel">Cancel</string>
 </resources>

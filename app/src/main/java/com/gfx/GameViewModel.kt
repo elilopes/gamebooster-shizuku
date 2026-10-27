@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gfx.data.AppDatabase
 import com.gfx.data.GameProfile
+import com.gfx.data.SavedGameEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +51,9 @@ data class AppItemInfo(
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val packageManager = application.packageManager
-    private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db").build()
+    private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db")
+        .fallbackToDestructiveMigration(dropAllTables = true)
+        .build()
     private val boostPrefs = application.getSharedPreferences("boost_settings_prefs", Context.MODE_PRIVATE)
     private val manualGamesPrefs = application.getSharedPreferences("manual_games_prefs", Context.MODE_PRIVATE)
 
@@ -99,10 +102,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     // Thermal Monitor State
     val thermalMonitorEnabled = MutableStateFlow(false)
+    val fpsAnalyticsEnabled = MutableStateFlow(boostPrefs.getBoolean("fpsAnalyticsEnabled", false))
     val autoMemoryRelease = MutableStateFlow(false)
     val temperature = MutableStateFlow(0f)
     val memoryUsage = MutableStateFlow(0f)
     private var thermalMonitoringJob: Job? = null
+
+    fun toggleFpsAnalytics(enabled: Boolean) {
+        fpsAnalyticsEnabled.value = enabled
+        boostPrefs.edit().putBoolean("fpsAnalyticsEnabled", enabled).apply()
+    }
 
     // Image Optimizer State
     val inspectedImage = MutableStateFlow<ImageOptimizerHelper.ImageInfo?>(null)
@@ -251,67 +260,79 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun loadGames() {
+    /**
+     * [PT-BR] Carrega na inicialização exclusivamente os jogos salvos pelo usuário no banco de dados Room.
+     * Não realiza busca automática em todos os aplicativos do celular ao abrir o app.
+     *
+     * [EN] Loads on startup exclusively the games saved by the user in the Room database.
+     * Does not perform an automatic scan of all phone applications when launching the app.
+     */
+    fun loadSavedGamesOnStartup() {
         viewModelScope.launch(Dispatchers.IO) {
             val profiles = db.gameProfileDao().getAllProfiles()
-            val manualSet = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet()) ?: emptySet()
-            
-            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
-            val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
-            val allApps = try { packageManager.getInstalledApplications(0) } catch (e: Exception) { emptyList() }
-            val appInfoMap = allApps.associateBy { it.packageName }
+            val savedEntities = db.savedGameDao().getAllSavedGames()
 
+            // Migração de segurança de preferências legadas para o Room
+            val legacyManual = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet()) ?: emptySet()
+            if (legacyManual.isNotEmpty()) {
+                val toMigrate = mutableListOf<SavedGameEntity>()
+                for (pkg in legacyManual) {
+                    if (savedEntities.none { it.packageName == pkg }) {
+                        val name = try {
+                            val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                            appInfo.loadLabel(packageManager).toString()
+                        } catch (e: Exception) {
+                            pkg
+                        }
+                        toMigrate.add(SavedGameEntity(pkg, name))
+                    }
+                }
+                if (toMigrate.isNotEmpty()) {
+                    db.savedGameDao().insertAll(toMigrate)
+                }
+            }
+
+            val currentSaved = db.savedGameDao().getAllSavedGames()
             val list = mutableListOf<GameApp>()
 
-            for (resolveInfo in resolveInfos) {
-                val pkg = resolveInfo.activityInfo.packageName
-                if (pkg == app.packageName) continue
-
-                val appInfo = appInfoMap[pkg] ?: resolveInfo.activityInfo.applicationInfo
-                val isManual = manualSet.contains(pkg)
-                val hasProfile = profiles.any { it.packageName == pkg }
-                val isGame = isGameApp(appInfo, pkg)
-
-                if (systemExcludePackages.contains(pkg) && !isManual && !hasProfile) continue
-
-                if (isGame || isManual || hasProfile) {
-                    val name = resolveInfo.loadLabel(packageManager).toString()
-                    val profile = profiles.find { it.packageName == pkg }
-                    val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
-                    val engine = GfxTools.detectEngine(app, pkg)
-                    list.add(GameApp(pkg, name, profile, vName, engine))
-                }
-            }
-
-            // Se nenhum jogo categorizado for encontrado ainda, inclui os apps de usuário normais (não de sistema)
-            if (list.isEmpty()) {
-                for (appInfo in allApps) {
-                    val pkg = appInfo.packageName
-                    if (pkg == app.packageName || systemExcludePackages.contains(pkg)) continue
-                    val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-                    if (isUserApp) {
-                        val name = appInfo.loadLabel(packageManager).toString()
-                        val profile = profiles.find { it.packageName == pkg }
-                        val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
-                        val engine = GfxTools.detectEngine(app, pkg)
-                        list.add(GameApp(pkg, name, profile, vName, engine))
-                    }
-                }
-            }
-
-            // Garantir que todos os jogos manuais salvos estejam na lista
-            for (pkg in manualSet) {
-                if (list.none { it.packageName == pkg }) {
+            for (saved in currentSaved) {
+                val pkg = saved.packageName
+                val name = saved.name.ifEmpty {
                     try {
                         val appInfo = packageManager.getApplicationInfo(pkg, 0)
-                        val name = appInfo.loadLabel(packageManager).toString()
-                        val profile = profiles.find { it.packageName == pkg }
-                        val vName = packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0"
-                        val engine = GfxTools.detectEngine(app, pkg)
-                        list.add(GameApp(pkg, name, profile, vName, engine))
+                        appInfo.loadLabel(packageManager).toString()
                     } catch (e: Exception) {
-                        // app não encontrado
+                        pkg
                     }
+                }
+                val profile = profiles.find { it.packageName == pkg }
+                val vName = try {
+                    packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0"
+                } catch (e: Exception) {
+                    "1.0.0"
+                }
+                val engine = GfxTools.detectEngine(app, pkg)
+                list.add(GameApp(pkg, name, profile, vName, engine))
+            }
+
+            // Garante que jogos que tenham perfis de resolução salvos também constem na lista
+            for (p in profiles) {
+                if (list.none { it.packageName == p.packageName }) {
+                    val pkg = p.packageName
+                    val name = try {
+                        val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                        appInfo.loadLabel(packageManager).toString()
+                    } catch (e: Exception) {
+                        pkg
+                    }
+                    val vName = try {
+                        packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0"
+                    } catch (e: Exception) {
+                        "1.0.0"
+                    }
+                    val engine = GfxTools.detectEngine(app, pkg)
+                    list.add(GameApp(pkg, name, p, vName, engine))
+                    db.savedGameDao().insertSavedGame(SavedGameEntity(pkg, name))
                 }
             }
 
@@ -319,8 +340,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun loadGames() {
+        loadSavedGamesOnStartup()
+    }
+
+    /**
+     * [PT-BR] Adiciona manualmente um jogo, salvando-o de forma permanente no banco de dados Room.
+     * Os jogos salvos são recarregados e exibidos na aba Games em todas as inicializações.
+     *
+     * [EN] Manually adds a game, permanently persisting it to the Room database.
+     * Saved games are reloaded and displayed in the Games tab across all app launches.
+     */
     fun addManualGame(packageName: String, name: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            // Salva na base de dados Room
+            val entity = SavedGameEntity(packageName, name)
+            db.savedGameDao().insertSavedGame(entity)
+
+            // Sincroniza em SharedPreferences para contingência
             val savedManuals = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet())?.toMutableSet() ?: mutableSetOf()
             savedManuals.add(packageName)
             manualGamesPrefs.edit().putStringSet("saved_manual_packages", savedManuals).apply()
@@ -339,24 +376,85 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * [PT-BR] Remove o jogo da lista e da base de dados Room.
+     * [EN] Removes the game from the list and from the Room database.
+     */
     fun removeGame(packageName: String) {
-        val savedManuals = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet())?.toMutableSet() ?: mutableSetOf()
-        if (savedManuals.contains(packageName)) {
-            savedManuals.remove(packageName)
-            manualGamesPrefs.edit().putStringSet("saved_manual_packages", savedManuals).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            db.savedGameDao().deleteSavedGame(packageName)
+            val savedManuals = manualGamesPrefs.getStringSet("saved_manual_packages", emptySet())?.toMutableSet() ?: mutableSetOf()
+            if (savedManuals.contains(packageName)) {
+                savedManuals.remove(packageName)
+                manualGamesPrefs.edit().putStringSet("saved_manual_packages", savedManuals).apply()
+            }
+            _games.value = _games.value.filter { it.packageName != packageName }
         }
-        _games.value = _games.value.filter { it.packageName != packageName }
     }
 
+    /**
+     * [PT-BR] Busca automática sob demanda: acionada apenas quando o usuário clica no botão "Busca automática".
+     * Varre os jogos instalados, adiciona todos automaticamente e persiste no banco de dados Room.
+     *
+     * [EN] On-demand auto scan: triggered only when the user taps the "Auto scan" button.
+     * Scans installed games, automatically adds them all, and persists them to the Room database.
+     */
     fun autoScanAndAddGames(onResult: ((Int) -> Unit)? = null) {
         viewModelScope.launch(Dispatchers.IO) {
-            loadGames()
-            delay(300)
-            val count = _games.value.size
-            if (onResult != null) {
-                withContext(Dispatchers.Main) {
-                    onResult(count)
+            val profiles = db.gameProfileDao().getAllProfiles()
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+            val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
+            val allApps = try { packageManager.getInstalledApplications(0) } catch (e: Exception) { emptyList() }
+            val appInfoMap = allApps.associateBy { it.packageName }
+
+            val list = mutableListOf<GameApp>()
+            val entitiesToSave = mutableListOf<SavedGameEntity>()
+
+            for (resolveInfo in resolveInfos) {
+                val pkg = resolveInfo.activityInfo.packageName
+                if (pkg == app.packageName) continue
+
+                val appInfo = appInfoMap[pkg] ?: resolveInfo.activityInfo.applicationInfo
+                val isGame = isGameApp(appInfo, pkg)
+
+                if (systemExcludePackages.contains(pkg) && !isGame) continue
+
+                if (isGame) {
+                    val name = resolveInfo.loadLabel(packageManager).toString()
+                    val profile = profiles.find { it.packageName == pkg }
+                    val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
+                    val engine = GfxTools.detectEngine(app, pkg)
+                    list.add(GameApp(pkg, name, profile, vName, engine))
+                    entitiesToSave.add(SavedGameEntity(pkg, name))
                 }
+            }
+
+            if (list.isEmpty()) {
+                for (appInfo in allApps) {
+                    val pkg = appInfo.packageName
+                    if (pkg == app.packageName || systemExcludePackages.contains(pkg)) continue
+                    val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                    if (isUserApp) {
+                        val name = appInfo.loadLabel(packageManager).toString()
+                        val profile = profiles.find { it.packageName == pkg }
+                        val vName = try { packageManager.getPackageInfo(pkg, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" }
+                        val engine = GfxTools.detectEngine(app, pkg)
+                        list.add(GameApp(pkg, name, profile, vName, engine))
+                        entitiesToSave.add(SavedGameEntity(pkg, name))
+                    }
+                }
+            }
+
+            // Persiste todos os jogos detectados no banco de dados Room
+            if (entitiesToSave.isNotEmpty()) {
+                db.savedGameDao().insertAll(entitiesToSave)
+            }
+
+            val merged = (_games.value + list).distinctBy { it.packageName }
+            _games.value = merged
+
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(merged.size)
             }
         }
     }

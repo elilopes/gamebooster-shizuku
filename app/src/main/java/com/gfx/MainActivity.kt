@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -170,28 +171,20 @@ fun SystemStatusBadge() {
         else -> MaterialTheme.colorScheme.onErrorContainer
     }
 
+    var showDiagnosticModal by remember { mutableStateOf(false) }
+
+    if (showDiagnosticModal) {
+        PrivilegeDiagnosticDialog(onDismiss = { showDiagnosticModal = false })
+    }
+
     Surface(
         color = containerColor,
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.clickable {
-            if (isBinderAlive && !isShizukuActive) {
-                val sent = ShizukuHelper.requestPermission()
-                if (!sent) {
-                    val opened = ShizukuHelper.openShizukuApp(context)
-                    if (opened) {
-                        Toast.makeText(context, "Abra o Shizuku e conceda a permissão ao aplicativo.", Toast.LENGTH_LONG).show()
-                    } else {
-                        Toast.makeText(context, "Inicie o serviço do Shizuku no dispositivo.", Toast.LENGTH_LONG).show()
-                    }
-                } else {
-                    Toast.makeText(context, "Solicitando autorização ao Shizuku...", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                ShizukuHelper.updateStatus()
-                isRootActive.value = ShizukuHelper.isRootAvailable()
-                Toast.makeText(context, "Status atualizado: $statusText", Toast.LENGTH_SHORT).show()
+        modifier = Modifier
+            .testTag("system_status_badge")
+            .clickable {
+                showDiagnosticModal = true
             }
-        }
     ) {
         Text(
             text = statusText,
@@ -236,6 +229,7 @@ fun exitApp(context: Context) {
 fun MainScreen(viewModel: GameViewModel = viewModel()) {
     val context = LocalContext.current
     val thermalMonitorEnabled by viewModel.thermalMonitorEnabled.collectAsState()
+    val fpsAnalyticsEnabled by viewModel.fpsAnalyticsEnabled.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -248,13 +242,19 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
         stringResource(id = R.string.tab_boost_settings),
         stringResource(id = R.string.tab_backup_app),
         stringResource(id = R.string.tab_scripts),
+        stringResource(id = R.string.tab_controller),
         stringResource(id = R.string.tab_setedit)
     )
 
-    val tabs = if (thermalMonitorEnabled) {
-        listOf(stringResource(id = R.string.tab_thermal_monitor)) + baseTabs
-    } else {
-        baseTabs
+    val thermalTitle = stringResource(id = R.string.tab_thermal_monitor)
+    val fpsTitle = stringResource(id = R.string.tab_fps_metrics)
+
+    val tabs = remember(thermalMonitorEnabled, fpsAnalyticsEnabled) {
+        mutableListOf<String>().apply {
+            if (thermalMonitorEnabled) add(thermalTitle)
+            if (fpsAnalyticsEnabled) add(fpsTitle)
+            addAll(baseTabs)
+        }
     }
 
     val activeIndex = selectedTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
@@ -337,6 +337,22 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                         },
                         onClick = {
                             viewModel.toggleThermalMonitor(!thermalMonitorEnabled)
+                            showMenu = false
+                            selectedTabIndex = 0
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (fpsAnalyticsEnabled) {
+                                    stringResource(id = R.string.menu_disable_fps_analytics)
+                                } else {
+                                    stringResource(id = R.string.menu_enable_fps_analytics)
+                                }
+                            )
+                        },
+                        onClick = {
+                            viewModel.toggleFpsAnalytics(!fpsAnalyticsEnabled)
                             showMenu = false
                             selectedTabIndex = 0
                         }
@@ -470,6 +486,8 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
             currentTabTitle == stringResource(id = R.string.tab_boost_settings) -> BoostSettingsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_backup_app) -> BackupAppTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_scripts) -> ScriptsTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_controller) -> GameControllerTab(viewModel)
+            currentTabTitle == stringResource(id = R.string.tab_fps_metrics) -> FpsMetricsTab(viewModel)
             currentTabTitle == stringResource(id = R.string.tab_setedit) -> SetEditTab(viewModel)
             else -> GameListTab(viewModel)
         }
@@ -802,7 +820,10 @@ fun LogsDialog(onDismiss: () -> Unit) {
                                 Text(text = stringResource(id = R.string.logs_check_available), fontSize = 10.sp)
                             }
                             FilledTonalButton(
-                                onClick = { ShizukuHelper.isShizukuInstalled(context) },
+                                onClick = {
+                                    Toast.makeText(context, context.getString(R.string.checking_shizuku_installed), Toast.LENGTH_SHORT).show()
+                                    ShizukuHelper.verifyShizukuInstallationAndState(context)
+                                },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier.height(30.dp)
                             ) {
@@ -1230,6 +1251,32 @@ fun GameListTab(viewModel: GameViewModel) {
         }
         item {
             Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(id = R.string.game_list_guidance),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
+        item {
+            Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
             ) {
@@ -1254,20 +1301,26 @@ fun GameListTab(viewModel: GameViewModel) {
                             val isBinderAlive by ShizukuHelper.isBinderAlive.collectAsState()
                             Button(
                                 onClick = {
-                                    if (!isShizukuGranted) {
-                                        val requested = ShizukuHelper.requestPermission()
-                                        if (!requested) {
-                                            val opened = ShizukuHelper.openShizukuApp(context)
-                                            if (opened) {
-                                                Toast.makeText(context, "Abra o Shizuku e aprove a permissão para este aplicativo.", Toast.LENGTH_LONG).show()
-                                            } else {
-                                                Toast.makeText(context, "Serviço Shizuku não detectado. Inicie o Shizuku primeiro.", Toast.LENGTH_LONG).show()
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "Solicitação enviada. Confirme na janela do Shizuku.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.checking_shizuku_installed), Toast.LENGTH_SHORT).show()
+                                    val status = ShizukuHelper.verifyShizukuInstallationAndState(context) { msg, isErr ->
+                                        Toast.makeText(context, msg, if (isErr) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+                                    }
+                                    when (status) {
+                                        ShizukuHelper.ShizukuDetailedStatus.NOT_INSTALLED -> {
+                                            ShizukuHelper.openShizukuApp(context)
                                         }
-                                    } else {
-                                        Toast.makeText(context, "Shizuku já está autorizado e ativo!", Toast.LENGTH_SHORT).show()
+                                        ShizukuHelper.ShizukuDetailedStatus.INSTALLED_BUT_NOT_RUNNING -> {
+                                            ShizukuHelper.openShizukuApp(context)
+                                        }
+                                        ShizukuHelper.ShizukuDetailedStatus.RUNNING_NOT_AUTHORIZED -> {
+                                            val requested = ShizukuHelper.requestPermission()
+                                            if (!requested) {
+                                                ShizukuHelper.openShizukuApp(context)
+                                            }
+                                        }
+                                        ShizukuHelper.ShizukuDetailedStatus.RUNNING_AND_AUTHORIZED -> {
+                                            // Shizuku já autorizado e ativo
+                                        }
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -1281,9 +1334,9 @@ fun GameListTab(viewModel: GameViewModel) {
                             ) {
                                 Text(
                                     text = when {
-                                        isShizukuGranted -> "Shizuku Ativo"
-                                        isBinderAlive -> "Ativar Shizuku"
-                                        else -> "Ativar Shizuku"
+                                        isShizukuGranted -> stringResource(id = R.string.shizuku_btn_active)
+                                        isBinderAlive -> stringResource(id = R.string.shizuku_btn_authorize)
+                                        else -> stringResource(id = R.string.shizuku_btn_verify)
                                     },
                                     style = MaterialTheme.typography.labelSmall
                                 )
@@ -1305,6 +1358,7 @@ fun GameListTab(viewModel: GameViewModel) {
                         }
                         Button(
                             onClick = {
+                                Toast.makeText(context, context.getString(R.string.auto_scan_starting), Toast.LENGTH_SHORT).show()
                                 viewModel.autoScanAndAddGames { count ->
                                     val msg = context.getString(R.string.auto_scan_result, count)
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -1326,6 +1380,43 @@ fun GameListTab(viewModel: GameViewModel) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (games.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(id = R.string.no_apps_found),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(id = R.string.game_list_guidance),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         items(games) { game ->

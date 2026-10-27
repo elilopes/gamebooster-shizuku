@@ -112,6 +112,7 @@ object ShizukuHelper {
      * [EN] Listener triggered when binder connection with the Shizuku service is established.
      */
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        val infoMsg = "Função OnBinderReceivedListener foi chamada!"
         Log.d("ShizukuHelper", "Função OnBinderReceivedListener foi chamada!")
         updateStatus()
     }
@@ -241,7 +242,7 @@ object ShizukuHelper {
             try {
                 if (!Shizuku.isPreV11()) {
                     val perm = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-                    Log.d("ShizukuHelper", "Permissão Shizuku concedida: $perm")
+                    Log.d("ShizukuHelper", "Permissão do Shizuku concedida: $perm")
                     perm
                 } else {
                     val perm = appContext?.let {
@@ -262,15 +263,162 @@ object ShizukuHelper {
     }
 
     /**
-     * [PT-BR] Alias para verificar se o serviço do Shizuku está em execução no dispositivo de forma limpa.
-     *
-     * [EN] Clean alias checking whether Shizuku service is running.
+     * [PT-BR] Estado detalhado do Shizuku combinando instalação, status do serviço e permissão.
+     * [EN] Detailed Shizuku status combining installation, service running status, and permission.
      */
-    fun isShizukuRunning(): Boolean {
-        return try {
-            Shizuku.pingBinder()
+    enum class ShizukuDetailedStatus {
+        NOT_INSTALLED,
+        INSTALLED_BUT_NOT_RUNNING,
+        RUNNING_NOT_AUTHORIZED,
+        RUNNING_AND_AUTHORIZED
+    }
+
+    /**
+     * [PT-BR] Alias para verificar se o serviço do Shizuku está em execução no dispositivo.
+     * Verifica via pingBinder oficial e fallbacks de provedor/reflexão/processo.
+     *
+     * [EN] Alias checking whether Shizuku service is running.
+     * Checks via official pingBinder and provider/reflection/process fallbacks.
+     */
+    fun isShizukuRunning(context: Context? = appContext): Boolean {
+        // 1. Verificação oficial via API pingBinder
+        try {
+            if (Shizuku.pingBinder()) {
+                _isBinderAlive.value = true
+                return true
+            }
         } catch (e: Throwable) {
-            false
+            // continua para outros métodos
+        }
+
+        // 2. Verificação via UID do Servidor Shizuku (0 = Root, 2000 = ADB)
+        if (isShizukuRunningByUid()) {
+            _isBinderAlive.value = true
+            return true
+        }
+
+        // 3. Consulta ao BinderProvider do Shizuku (apenas se registrado no PackageManager)
+        val ctx = context ?: appContext
+        if (ctx != null) {
+            val authorities = listOf(
+                "moe.shizuku.privileged.api.provider.BinderProvider",
+                "moe.shizuku.manager.provider.BinderProvider"
+            )
+            for (auth in authorities) {
+                try {
+                    val providerInfo = ctx.packageManager.resolveContentProvider(auth, 0)
+                    if (providerInfo != null) {
+                        val uri = Uri.parse("content://$auth")
+                        val cursor = ctx.contentResolver.query(uri, null, null, null, null)
+                        if (cursor != null) {
+                            cursor.close()
+                            _isBinderAlive.value = true
+                            return true
+                        }
+                    }
+                } catch (e: Throwable) {
+                    // ignora falha de consulta
+                }
+            }
+        }
+
+        // 4. Fallback via reflexão de Binder interno
+        if (isShizukuBinderAlive()) {
+            _isBinderAlive.value = true
+            return true
+        }
+
+        // 5. Fallback via pgrep/pidof
+        if (isShizukuProcessRunning()) {
+            _isBinderAlive.value = true
+            return true
+        }
+
+        // 6. Fallback via ps | grep shizuku_server
+        if (isShizukuRunningByPsGrep()) {
+            _isBinderAlive.value = true
+            return true
+        }
+
+        // 7. Fallback via service list
+        if (isShizukuRunningByServiceList()) {
+            _isBinderAlive.value = true
+            return true
+        }
+
+        _isBinderAlive.value = false
+        return false
+    }
+
+    /**
+     * [PT-BR] Verifica se o aplicativo Shizuku está instalado de forma silenciosa sem alertas de erro na UI.
+     * [EN] Quietly checks if Shizuku app is installed without error banners in the UI.
+     */
+    fun isShizukuInstalledQuiet(context: Context? = appContext): Boolean {
+        val ctx = context ?: appContext ?: return false
+        for (pkg in KNOWN_SHIZUKU_PACKAGES) {
+            try {
+                ctx.packageManager.getPackageInfo(pkg, 0)
+                return true
+            } catch (e: Exception) {
+                // Tenta o próximo
+            }
+        }
+        return false
+    }
+
+    /**
+     * [PT-BR] Inicia a verificação completa do Shizuku emitindo o alerta solicitado e retornando o estado detalhado.
+     * Dispara o alerta inicial "Verificando se shizuku está instalado" para a UI e logs.
+     *
+     * [EN] Starts complete verification of Shizuku emitting the requested alert and returning detailed state.
+     * Dispatches the initial "Verificando se shizuku está instalado" alert to the UI and logs.
+     */
+    fun verifyShizukuInstallationAndState(context: Context, onFeedback: ((String, Boolean) -> Unit)? = null): ShizukuDetailedStatus {
+        appContext = context.applicationContext
+        
+        // 1. Alerta obrigatório de início de verificação
+        val checkingMsg = context.getString(R.string.checking_shizuku_installed)
+        Log.d("ShizukuHelper", checkingMsg)
+        addLog(checkingMsg, isError = false)
+        onFeedback?.invoke(checkingMsg, false)
+
+        // 2. Verifica se o pacote está instalado no Android
+        val isInstalled = isShizukuInstalledQuiet(context)
+        if (!isInstalled) {
+            val notInstalledMsg = context.getString(R.string.shizuku_not_installed)
+            Log.d("ShizukuHelper", notInstalledMsg)
+            dispatchAlert(notInstalledMsg)
+            onFeedback?.invoke(notInstalledMsg, true)
+            return ShizukuDetailedStatus.NOT_INSTALLED
+        }
+
+        // 3. Atualiza o status de binder e permissão
+        updateStatus()
+        val isRunning = isShizukuRunning(context)
+
+        if (!isRunning) {
+            val notRunningMsg = context.getString(R.string.shizuku_installed_not_running)
+            Log.d("ShizukuHelper", notRunningMsg)
+            addLog(notRunningMsg, isError = false)
+            onFeedback?.invoke(notRunningMsg, false)
+            return ShizukuDetailedStatus.INSTALLED_BUT_NOT_RUNNING
+        }
+
+        // 4. Se o serviço estiver rodando, verifica se a permissão já foi dada
+        val hasPerm = hasPermission(context, dispatchFeedback = false)
+        return if (hasPerm) {
+            val successMsg = context.getString(R.string.shizuku_running_authorized)
+            Log.d("ShizukuHelper", successMsg)
+            dispatchSuccess(successMsg)
+            onFeedback?.invoke(successMsg, false)
+            ShizukuDetailedStatus.RUNNING_AND_AUTHORIZED
+        } else {
+            val pendingMsg = context.getString(R.string.shizuku_installed_running)
+            Log.d("ShizukuHelper", pendingMsg)
+            dispatchSuccess(pendingMsg)
+            onFeedback?.invoke(pendingMsg, false)
+            ShizukuDetailedStatus.RUNNING_NOT_AUTHORIZED
         }
     }
 
@@ -284,27 +432,23 @@ object ShizukuHelper {
      */
     fun isShizukuAvailable(): Boolean {
         return try {
-            // Forma oficial para reconhecer se Shizuku está ativado (verifica se o binder respondeu com sucesso)
             val available = Shizuku.pingBinder()
             if (available) {
+                val infoMsg = "Shizuku ativado e respondendo, binder OK"
                 val successMsg = "Shizuku ativado e respondendo com sucesso (pingBinder OK)."
                 Log.d("ShizukuHelper", successMsg)
                 dispatchSuccess(successMsg)
                 true
             } else {
-                val infoMsg = "Shizuku.pingBinder() indisponível: o serviço não está ativo."
+                val infoMsg = "Shizuku.pingBinder() indisponível: o serviço não ativo."
                 Log.d("ShizukuHelper", infoMsg)
-                addLog(infoMsg, isError = true)
-                _shizukuAlert.value = infoMsg
-                onShizukuAlert?.invoke(infoMsg)
+                addLog(infoMsg, isError = false)
                 false
             }
         } catch (e: Throwable) {
-            val infoMsg = "Shizuku.pingBinder() indisponível: ${e.message ?: "o serviço não está ativo."}"
+            val infoMsg = "Shizuku.pingBinder() indisponível: ${e.message ?: "o serviço não ativo."}"
             Log.d("ShizukuHelper", infoMsg)
-            addLog(infoMsg, isError = true)
-            _shizukuAlert.value = infoMsg
-            onShizukuAlert?.invoke(infoMsg)
+            addLog(infoMsg, isError = false)
             false
         }
     }
@@ -366,6 +510,7 @@ object ShizukuHelper {
         val ctx = context ?: appContext
         if (!isShizukuRunning()) {
             if (dispatchFeedback) {
+                val infoMsg = "Shizuku não está ativo ou em execução"
                 val errorMsg = "Shizuku não está ativo ou em execução."
                 Log.d("ShizukuManager", errorMsg)
                 _shizukuAlert.value = errorMsg
@@ -375,7 +520,10 @@ object ShizukuHelper {
             return false
         }
 
-        val granted = if (Shizuku.isPreV11()) {
+        val isPingOk = try { Shizuku.pingBinder() } catch (t: Throwable) { false }
+        val granted = if (!isPingOk) {
+            false
+        } else if (try { Shizuku.isPreV11() } catch (e: Throwable) { false }) {
             // Modelo tradicional (pré-v11): verifica via PackageManager do Android
             try {
                 if (ctx != null) {
@@ -431,29 +579,37 @@ object ShizukuHelper {
             return false
         }
         return try {
-            // URI do Binder do Shizuku
-            val uri = Uri.parse("content://moe.shizuku.privileged.api.provider.BinderProvider")
-            val cursor = ctx.contentResolver.query(uri, null, null, null, null)
-
-            val running = if (cursor != null) {
-                cursor.close()
-                true // Se retornou um cursor válido, o serviço está de pé
-            } else {
-                false
-            }
-
-            if (running) {
-                val successMsg = "Shizuku verificado com sucesso via Content Provider (BinderProvider ativo)!"
-                Log.d("ShizukuHelper", successMsg)
-                dispatchSuccess(successMsg)
-            } else {
-                val errorMsg = "Shizuku não está respondendo via Content Provider (cursor nulo)."
+            val auth = "moe.shizuku.privileged.api.provider.BinderProvider"
+            val providerInfo = ctx.packageManager.resolveContentProvider(auth, 0)
+            if (providerInfo == null) {
+                val errorMsg = "Provedor Shizuku não registrado no sistema."
                 Log.d("ShizukuHelper", errorMsg)
                 dispatchAlert(errorMsg)
+                false
+            } else {
+                val uri = Uri.parse("content://$auth")
+                val cursor = ctx.contentResolver.query(uri, null, null, null, null)
+
+                val running = if (cursor != null) {
+                    cursor.close()
+                    true // Se retornou um cursor válido, o serviço está de pé
+                } else {
+                    false
+                }
+
+                if (running) {
+                    val successMsg = "Shizuku verificado com sucesso via Content Provider (BinderProvider ativo)!"
+                    Log.d("ShizukuHelper", successMsg)
+                    dispatchSuccess(successMsg)
+                } else {
+                    val errorMsg = "Shizuku não está respondendo via Content Provider (cursor nulo)."
+                    Log.d("ShizukuHelper", errorMsg)
+                    dispatchAlert(errorMsg)
+                }
+                running
             }
-            running
         } catch (e: Exception) {
-            // Lança exceção se o provider não responder ou não existir (serviço parado)
+            // Lança exceção se o provider não responder ou falhar
             val errorMsg = "Falha ao verificar Shizuku via Content Provider: ${e.message}"
             Log.d("ShizukuHelper", errorMsg)
             dispatchAlert(errorMsg, e)
@@ -545,8 +701,16 @@ object ShizukuHelper {
                 }
             }
 
+            // 3. Se pgrep e pidof não funcionarem, tenta ps | grep shizuku_server
+            if (!running) {
+                if (isShizukuRunningByPsGrep()) {
+                    running = true
+                    pid = "ps_grep"
+                }
+            }
+
             if (running) {
-                val successMsg = "Processo do servidor Shizuku (shizuku_server) está ativo no sistema (PID: $pid)!"
+                val successMsg = "Servidor Shizuku ativo no sistema (identificação: $pid)!"
                 Log.d("ShizukuHelper", successMsg)
                 dispatchSuccess(successMsg)
             } else {
@@ -559,6 +723,73 @@ object ShizukuHelper {
             val errorMsg = "Falha ao verificar processo do Shizuku via comando Shell: ${e.message}"
             Log.d("ShizukuHelper", errorMsg)
             dispatchAlert(errorMsg, e)
+            false
+        }
+    }
+
+    /**
+     * [PT-BR] Processo de verificação do Shizuku ativo via UID: Shizuku.getUid() == 0 (Root) ou 2000 (ADB/Shell).
+     * [EN] Verification of active Shizuku via UID: Shizuku.getUid() == 0 (Root) or 2000 (ADB/Shell).
+     */
+    fun isShizukuRunningByUid(): Boolean {
+        return try {
+            if (!Shizuku.pingBinder()) return false
+            val uid = Shizuku.getUid()
+            val running = (uid == 0 || uid == 2000)
+            if (running) {
+                val mode = if (uid == 0) "Root (uid=0)" else "ADB/Shell (uid=2000)"
+                val successMsg = "Shizuku ativo verificado com sucesso via UID: $mode"
+                Log.d("ShizukuHelper", successMsg)
+                addLog(successMsg)
+            }
+            running
+        } catch (e: Throwable) {
+            Log.d("ShizukuHelper", "Falha ao verificar UID do Shizuku: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * [PT-BR] Fallback de detecção de processo Shizuku via ps | grep shizuku_server.
+     * [EN] Fallback Shizuku process detection via ps | grep shizuku_server.
+     */
+    fun isShizukuRunningByPsGrep(): Boolean {
+        return try {
+            val cmd = arrayOf("sh", "-c", "ps -A 2>/dev/null | grep -E 'shizuku_server|shizuku' || ps 2>/dev/null | grep -E 'shizuku_server|shizuku'")
+            val process = Runtime.getRuntime().exec(cmd)
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor()
+            val found = output.contains("shizuku_server") || output.contains("moe.shizuku.privileged.api")
+            if (found) {
+                Log.d("ShizukuHelper", "Processo Shizuku detectado via ps | grep: ${output.lines().firstOrNull()?.trim()}")
+                addLog("Processo Shizuku detectado via ps | grep")
+            }
+            found
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * [PT-BR] Fallback de detecção de serviço do Shizuku via ServiceManager.
+     * Utiliza 'service check' para consulta direta e segura ao ServiceManager pelo nome específico do serviço,
+     * evitando varreduras cegas de listas inteiras que provocam erros nativos de Parcel com strings nulas em serviços restritos.
+     *
+     * [EN] Fallback Shizuku service detection via ServiceManager using safe 'service check'.
+     */
+    fun isShizukuRunningByServiceList(): Boolean {
+        return try {
+            val cmd = "service check moe.shizuku.privileged.api 2>/dev/null || service check moe.shizuku.manager 2>/dev/null"
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor()
+            val found = output.contains(": found") || (output.contains("found") && !output.contains("not found"))
+            if (found) {
+                Log.d("ShizukuHelper", "Serviço Shizuku localizado no ServiceManager via service check")
+                addLog("Serviço Shizuku detectado via service check")
+            }
+            found
+        } catch (e: Throwable) {
             false
         }
     }
@@ -588,9 +819,9 @@ object ShizukuHelper {
                 }
             } else {
                 val errorMsg = if (isShizukuInstalled()) {
-                    "O aplicativo Shizuku está instalado, mas o serviço não está em execução."
+                    "Shizuku está instalado, mas o serviço não está ativo."
                 } else {
-                    "O aplicativo Shizuku não está instalado no dispositivo."
+                    "Shizuku não está instalado no dispositivo."
                 }
                 dispatchAlert(errorMsg)
                 false
@@ -719,11 +950,389 @@ object ShizukuHelper {
      *
      * @param listener Instância de [Shizuku.OnRequestPermissionResultListener].
      */
-    fun unregisterPermissionListener(listener: Shizuku.OnRequestPermissionResultListener) {
+    /**
+     * [PT-BR] Adiciona um listener para o evento de Binder recebido do Shizuku.
+     * [EN] Adds a listener for the Shizuku Binder received event.
+     */
+    fun addBinderReceivedListener(listener: Shizuku.OnBinderReceivedListener) {
         try {
-            Shizuku.removeRequestPermissionResultListener(listener)
+            Shizuku.addBinderReceivedListener(listener)
+            addLog("Listener de Binder recebido registrado.")
         } catch (e: Throwable) {
-            dispatchAlert("Erro ao remover listener de permissão do Shizuku: ${e.message}", e)
+            dispatchAlert("Erro ao registrar binderReceivedListener: ${e.message}", e)
+        }
+    }
+
+    /**
+     * [PT-BR] Remove o listener de Binder recebido do Shizuku.
+     * [EN] Removes the Shizuku Binder received listener.
+     */
+    fun removeBinderReceivedListener(listener: Shizuku.OnBinderReceivedListener) {
+        try {
+            Shizuku.removeBinderReceivedListener(listener)
+            addLog("Listener de Binder recebido desregistrado.")
+        } catch (e: Throwable) {
+            dispatchAlert("Erro ao remover binderReceivedListener: ${e.message}", e)
+        }
+    }
+
+    /**
+     * [PT-BR] Adiciona um listener para o evento de Binder desconectado/morto do Shizuku.
+     * [EN] Adds a listener for the Shizuku Binder dead event.
+     */
+    fun addBinderDeadListener(listener: Shizuku.OnBinderDeadListener) {
+        try {
+            Shizuku.addBinderDeadListener(listener)
+            addLog("Listener de Binder encerrado registrado.")
+        } catch (e: Throwable) {
+            dispatchAlert("Erro ao registrar binderDeadListener: ${e.message}", e)
+        }
+    }
+
+    /**
+     * [PT-BR] Remove o listener de Binder encerrado do Shizuku.
+     * [EN] Removes the Shizuku Binder dead listener.
+     */
+    fun removeBinderDeadListener(listener: Shizuku.OnBinderDeadListener) {
+        try {
+            Shizuku.removeBinderDeadListener(listener)
+            addLog("Listener de Binder encerrado desregistrado.")
+        } catch (e: Throwable) {
+            dispatchAlert("Erro ao remover binderDeadListener: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Estrutura que encapsula o resultado de um teste detalhado de privilégio.
+     */
+    data class DiagnosticResult(
+        val id: String,
+        val title: String,
+        val commandOrApi: String,
+        val isSuccess: Boolean,
+        val output: String,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    fun runTestPingBinder(): DiagnosticResult {
+        val start = System.currentTimeMillis()
+        return try {
+            val alive = Shizuku.pingBinder()
+            DiagnosticResult(
+                id = "ping_binder",
+                title = "Shizuku: Ping Binder",
+                commandOrApi = "Shizuku.pingBinder()",
+                isSuccess = alive,
+                output = if (alive) {
+                    "SUCCESS: Shizuku.pingBinder() retornou true.\nTempo de resposta: ${System.currentTimeMillis() - start}ms\nO servidor Shizuku está ativo e o canal IPC Binder está comunicando normalmente."
+                } else {
+                    "FAILURE: Shizuku.pingBinder() retornou false.\nO servidor Shizuku não está ativo no sistema ou o Binder ainda não foi recebido."
+                }
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "ping_binder",
+                title = "Shizuku: Ping Binder",
+                commandOrApi = "Shizuku.pingBinder()",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestGetUid(): DiagnosticResult {
+        return try {
+            if (!Shizuku.pingBinder()) {
+                DiagnosticResult(
+                    id = "get_uid",
+                    title = "Shizuku: Servidor UID",
+                    commandOrApi = "Shizuku.getUid()",
+                    isSuccess = false,
+                    output = "FAILURE: O Binder do Shizuku não está ativo (pingBinder=false). Não é possível obter o UID."
+                )
+            } else {
+                val uid = Shizuku.getUid()
+                val isPrivileged = (uid == 0 || uid == 2000)
+                val role = when (uid) {
+                    0 -> "Root (Superusuário uid=0)"
+                    2000 -> "ADB / Shell (uid=2000)"
+                    else -> "Outro usuário não padrão (uid=$uid)"
+                }
+                DiagnosticResult(
+                    id = "get_uid",
+                    title = "Shizuku: Servidor UID",
+                    commandOrApi = "Shizuku.getUid()",
+                    isSuccess = isPrivileged,
+                    output = "RESULTADO:\n- UID retornado: $uid\n- Nível de Privilégio: $role\n- Verificação (uid == 0 || uid == 2000): $isPrivileged\nStatus: ${if (isPrivileged) "VÁLIDO (Servidor ativo com privilégios)" else "INVÁLIDO"}"
+                )
+            }
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "get_uid",
+                title = "Shizuku: Servidor UID",
+                commandOrApi = "Shizuku.getUid()",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestPermission(): DiagnosticResult {
+        return try {
+            if (!Shizuku.pingBinder()) {
+                DiagnosticResult(
+                    id = "perm_check",
+                    title = "Shizuku: Permissão do App",
+                    commandOrApi = "Shizuku.checkSelfPermission()",
+                    isSuccess = false,
+                    output = "FAILURE: Binder não recebido. Não é possível verificar permissão sem o serviço ativo."
+                )
+            } else {
+                val code = Shizuku.checkSelfPermission()
+                val granted = (code == PackageManager.PERMISSION_GRANTED)
+                DiagnosticResult(
+                    id = "perm_check",
+                    title = "Shizuku: Permissão do App",
+                    commandOrApi = "Shizuku.checkSelfPermission()",
+                    isSuccess = granted,
+                    output = if (granted) {
+                        "SUCCESS: Permissão CONCEDIDA (Código: $code).\nEste aplicativo possui permissão ativa para executar comandos privilegiados."
+                    } else {
+                        "FAILURE: Permissão NEGADA / PENDENTE (Código: $code).\nO usuário precisa autorizar o aplicativo na tela do Shizuku Manager."
+                    }
+                )
+            }
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "perm_check",
+                title = "Shizuku: Permissão do App",
+                commandOrApi = "Shizuku.checkSelfPermission()",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestPgrepPidof(): DiagnosticResult {
+        return try {
+            val cmd1 = "pgrep -f shizuku_server"
+            val p1 = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd1))
+            val out1 = p1.inputStream.bufferedReader().use { it.readText() }.trim()
+            val code1 = p1.waitFor()
+
+            val cmd2 = "pidof shizuku_server"
+            val p2 = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd2))
+            val out2 = p2.inputStream.bufferedReader().use { it.readText() }.trim()
+            val code2 = p2.waitFor()
+
+            val success = out1.isNotEmpty() || out2.isNotEmpty()
+            val sb = StringBuilder()
+            sb.append("COMANDO 1: $cmd1\n")
+            sb.append("Saída: ${if (out1.isEmpty()) "(vazio)" else out1}\n")
+            sb.append("Exit Code: $code1\n\n")
+            sb.append("COMANDO 2: $cmd2\n")
+            sb.append("Saída: ${if (out2.isEmpty()) "(vazio)" else out2}\n")
+            sb.append("Exit Code: $code2\n\n")
+            sb.append(if (success) "STATUS: Processo shizuku_server localizado com sucesso!" else "STATUS: Nenhum PID retornado por pgrep ou pidof.")
+
+            DiagnosticResult(
+                id = "pgrep_pidof",
+                title = "Shizuku: pgrep & pidof",
+                commandOrApi = "pgrep -f shizuku_server || pidof shizuku_server",
+                isSuccess = success,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "pgrep_pidof",
+                title = "Shizuku: pgrep & pidof",
+                commandOrApi = "pgrep -f shizuku_server",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestPsGrep(): DiagnosticResult {
+        return try {
+            val cmd = "ps -A 2>/dev/null | grep -E 'shizuku_server|shizuku' || ps 2>/dev/null | grep -E 'shizuku_server|shizuku'"
+            val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+            val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
+            val err = p.errorStream.bufferedReader().use { it.readText() }.trim()
+            val code = p.waitFor()
+
+            val success = out.contains("shizuku_server") || out.contains("moe.shizuku.privileged.api")
+            val sb = StringBuilder()
+            sb.append("COMANDO:\nps | grep shizuku_server\n\n")
+            sb.append("EXIT CODE: $code\n\n")
+            sb.append("SAÍDA PADRÃO (stdout):\n")
+            sb.append(if (out.isEmpty()) "(Nenhum processo correspondente encontrado)\n" else "$out\n")
+            if (err.isNotEmpty()) {
+                sb.append("\nSAÍDA DE ERRO (stderr):\n$err\n")
+            }
+            sb.append("\nRESULTADO: ${if (success) "Processo shizuku_server ENCONTRADO na tabela de processos do Android!" else "Processo NÃO encontrado."}")
+
+            DiagnosticResult(
+                id = "ps_grep",
+                title = "Shizuku: ps | grep shizuku_server",
+                commandOrApi = "ps | grep shizuku_server",
+                isSuccess = success,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "ps_grep",
+                title = "Shizuku: ps | grep shizuku_server",
+                commandOrApi = "ps | grep shizuku_server",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestServiceList(): DiagnosticResult {
+        return try {
+            val cmd = "service check moe.shizuku.privileged.api 2>/dev/null"
+            val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+            val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
+            val code = p.waitFor()
+
+            val success = out.contains(": found") || (out.contains("found") && !out.contains("not found"))
+            val sb = StringBuilder()
+            sb.append("COMANDO (service check):\nservice check moe.shizuku.privileged.api\n\n")
+            sb.append("EXIT CODE: $code\n\n")
+            sb.append("SAÍDA DO SERVICEMANAGER:\n")
+            sb.append(if (out.isEmpty()) "(Nenhuma resposta do service check)\n" else "$out\n")
+            sb.append("\nRESULTADO: ${if (success) "Serviço Shizuku ENCONTRADO e registrado no ServiceManager do Android!" else "Serviço NÃO encontrado no ServiceManager."}\n\n")
+            sb.append("Nota: O comando 'service check' consulta diretamente o serviço desejado sem varrer serviços restritos por SELinux do sistema, garantindo compatibilidade e prevenindo leituras de strings nulas no Parcel.")
+
+            DiagnosticResult(
+                id = "service_list",
+                title = "Shizuku: service check",
+                commandOrApi = "service check moe.shizuku.privileged.api",
+                isSuccess = success,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "service_list",
+                title = "Shizuku: service check",
+                commandOrApi = "service check moe.shizuku.privileged.api",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestContentProvider(context: Context): DiagnosticResult {
+        return try {
+            val auth = "moe.shizuku.privileged.api.provider.BinderProvider"
+            val provider = context.packageManager.resolveContentProvider(auth, 0)
+            val sb = StringBuilder()
+            sb.append("CONSULTA PACKAGE MANAGER:\nresolveContentProvider(\"$auth\", 0)\n\n")
+            if (provider != null) {
+                sb.append("RESULTADO: Provedor encontrado!\n")
+                sb.append("- Pacote: ${provider.packageName}\n")
+                sb.append("- Autoridade: ${provider.authority}\n")
+                sb.append("- Exportado: ${provider.exported}\n")
+            } else {
+                sb.append("RESULTADO: Provedor não registrado no sistema.\n(Normal no Android 11+ com Shizuku v11 via IPC Binder direto)")
+            }
+
+            DiagnosticResult(
+                id = "content_provider",
+                title = "Shizuku: ContentProvider Info",
+                commandOrApi = "resolveContentProvider(\"$auth\", 0)",
+                isSuccess = provider != null,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "content_provider",
+                title = "Shizuku: ContentProvider Info",
+                commandOrApi = "resolveContentProvider",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestRootBinary(): DiagnosticResult {
+        return try {
+            val paths = listOf(
+                "/system/bin/su",
+                "/system/xbin/su",
+                "/sbin/su",
+                "/vendor/bin/su",
+                "/system/app/Superuser.apk"
+            )
+            val existing = paths.filter { java.io.File(it).exists() }
+
+            val pWhich = Runtime.getRuntime().exec(arrayOf("sh", "-c", "which su"))
+            val whichOut = pWhich.inputStream.bufferedReader().use { it.readText() }.trim()
+            pWhich.waitFor()
+
+            val success = existing.isNotEmpty() || whichOut.isNotEmpty()
+            val sb = StringBuilder()
+            sb.append("COMANDO: which su\n")
+            sb.append("Saída: ${if (whichOut.isEmpty()) "(não encontrado no PATH)" else whichOut}\n\n")
+            sb.append("BUSCA EM DIRETÓRIOS PADRÃO:\n")
+            paths.forEach { path ->
+                val exists = java.io.File(path).exists()
+                sb.append("- $path: ${if (exists) "EXISTE" else "Não encontrado"}\n")
+            }
+            sb.append("\nRESULTADO: ${if (success) "Binário 'su' detectado no dispositivo!" else "Nenhum binário 'su' encontrado."}")
+
+            DiagnosticResult(
+                id = "root_binary",
+                title = "Root: Verificação do Binário 'su'",
+                commandOrApi = "which su & file inspection",
+                isSuccess = success,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "root_binary",
+                title = "Root: Verificação do Binário 'su'",
+                commandOrApi = "which su",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    fun runTestRootExecution(): DiagnosticResult {
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+            val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
+            val err = p.errorStream.bufferedReader().use { it.readText() }.trim()
+            val code = p.waitFor()
+
+            val success = code == 0 && out.contains("uid=0")
+            val sb = StringBuilder()
+            sb.append("COMANDO EXECUTADO:\nsu -c id\n\n")
+            sb.append("EXIT CODE: $code\n\n")
+            sb.append("SAÍDA PADRÃO (stdout):\n${if (out.isEmpty()) "(vazio)" else out}\n")
+            if (err.isNotEmpty()) {
+                sb.append("\nSAÍDA DE ERRO (stderr):\n$err\n")
+            }
+            sb.append("\nRESULTADO: ${if (success) "ROOT LIBERADO! Execução com uid=0 confirmada." else "Acesso ROOT NÃO liberado ou negado pelo gerenciador."}")
+
+            DiagnosticResult(
+                id = "root_exec",
+                title = "Root: Teste de Execução 'su -c id'",
+                commandOrApi = "su -c id",
+                isSuccess = success,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "root_exec",
+                title = "Root: Teste de Execução 'su -c id'",
+                commandOrApi = "su -c id",
+                isSuccess = false,
+                output = "EXCEPTION: Falha ao invocar 'su': ${e.message}\n(Normal caso o dispositivo não possua Root)"
+            )
         }
     }
 
@@ -752,6 +1361,100 @@ object ShizukuHelper {
     }
 
     /**
+     * [PT-BR] Verifica se o dispositivo possui acesso Root via com.topjohnwu.superuser.Shell.
+     * [EN] Checks if device has root access via com.topjohnwu.superuser.Shell.
+     */
+    fun isRootAvailableByLibSu(): Boolean {
+        return try {
+            com.topjohnwu.superuser.Shell.getShell().isRoot
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    fun runTestLibSuShell(): DiagnosticResult {
+        return try {
+            val isRoot = com.topjohnwu.superuser.Shell.getShell().isRoot
+            val status = com.topjohnwu.superuser.Shell.getShell().status
+            val sb = StringBuilder()
+            sb.append("BIBLIOTECA: com.topjohnwu.superuser.Shell\n")
+            sb.append("Status do Shell libsu: $status\n")
+            sb.append("É Root (isRoot): $isRoot\n\n")
+            sb.append(if (isRoot) "RESULTADO: Acesso Root confirmado com sucesso via libsu Shell!" else "RESULTADO: libsu Shell inicializado, mas sem acesso root (status: $status).")
+
+            DiagnosticResult(
+                id = "libsu_shell",
+                title = "Root: libsu Shell.getShell()",
+                commandOrApi = "com.topjohnwu.superuser.Shell.getShell().isRoot",
+                isSuccess = isRoot,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "libsu_shell",
+                title = "Root: libsu Shell.getShell()",
+                commandOrApi = "com.topjohnwu.superuser.Shell",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}\n(A biblioteca libsu pode não estar inicializada ou o root não está disponível)"
+            )
+        }
+    }
+
+    fun runTestRootManagers(context: Context? = appContext): DiagnosticResult {
+        val ctx = context ?: appContext
+        return try {
+            val rootManagers = listOf(
+                "com.topjohnwu.magisk" to "Magisk",
+                "me.weishu.kernelsu" to "KernelSU",
+                "me.bmax.apatch" to "APatch",
+                "eu.chainfire.supersu" to "SuperSU (legado)",
+                "com.koushikdutta.superuser" to "Superuser (legado)"
+            )
+
+            val sb = StringBuilder()
+            sb.append("LISTA DE GERENCIADORES ROOT VERIFICADOS:\n\n")
+            var foundAny = false
+
+            if (ctx != null) {
+                for ((pkg, name) in rootManagers) {
+                    val installed = try {
+                        ctx.packageManager.getPackageInfo(pkg, 0)
+                        true
+                    } catch (e: Exception) {
+                        false
+                    }
+                    if (installed) {
+                        foundAny = true
+                        sb.append("- [X] $name ($pkg): INSTALADO\n")
+                    } else {
+                        sb.append("- [ ] $name ($pkg): Não instalado\n")
+                    }
+                }
+            } else {
+                sb.append("Contexto nulo para verificar pacotes dos gerenciadores root.\n")
+            }
+
+            sb.append("\nRESULTADO: ${if (foundAny) "Pelo menos um gerenciador root foi encontrado instalado!" else "Nenhum gerenciador root conhecido foi encontrado no dispositivo."}")
+
+            DiagnosticResult(
+                id = "root_managers",
+                title = "Root: Gerenciadores (Magisk/KernelSU/APatch)",
+                commandOrApi = "PackageManager.getPackageInfo(rootManagers)",
+                isSuccess = foundAny,
+                output = sb.toString()
+            )
+        } catch (e: Throwable) {
+            DiagnosticResult(
+                id = "root_managers",
+                title = "Root: Gerenciadores",
+                commandOrApi = "rootManagers inspection",
+                isSuccess = false,
+                output = "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}"
+            )
+        }
+    }
+
+    /**
      * [PT-BR] Verifica se o dispositivo possui acesso Root disponível via executável `su`.
      *
      * [EN] Checks whether the device has Root access available via the `su` binary.
@@ -760,6 +1463,7 @@ object ShizukuHelper {
      */
     fun isRootAvailable(): Boolean {
         return try {
+            if (isRootAvailableByLibSu()) return true
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
             val output = process.inputStream.bufferedReader().use { it.readText() }
             process.waitFor() == 0 || output.contains("uid=0")

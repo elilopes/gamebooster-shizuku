@@ -340,4 +340,48 @@
     <string name="scripts_run_start_desc">Roda este script automaticamente quando o Game Booster for aberto</string>
     <string name="scripts_save_btn">Salvar Função</string>
     <string name="scripts_cancel">Cancelar</string>
+
+    <string name="controller_title">Controle de Jogo &amp; Sensibilidade</string>
+    <string name="controller_desc">Ajuste a sensibilidade do controle, escolha o formato de entrada ideal (Joystick, Inclinação, D-Pad, Voz ou Alta Precisão) e teste o comportamento em tempo real.</string>
+    <string name="controller_mode_label">Formato do Controle / Entrada:</string>
+    <string name="controller_mode_joystick">Joystick Virtual</string>
+    <string name="controller_mode_joystick_desc">Analógico flutuante na tela com resposta suave</string>
+    <string name="controller_mode_tilt">Inclinação / Giroscópio</string>
+    <string name="controller_mode_tilt_desc">Controla o movimento inclinando o dispositivo (Acelerômetro)</string>
+    <string name="controller_mode_dpad">Duas Setas / D-Pad</string>
+    <string name="controller_mode_dpad_desc">Botões direcionais clássicos para cima, baixo, esquerda, direita</string>
+    <string name="controller_mode_voice">Controle por Voz</string>
+    <string name="controller_mode_voice_desc">Comandos de áudio para pular, atirar, correr e recarregar</string>
+    <string name="controller_mode_touch">Toque de Alta Precisão</string>
+    <string name="controller_mode_touch_desc">Sampling otimizado para zero latência no toque</string>
+    <string name="controller_sensitivity_header">Ajustes de Sensibilidade &amp; Resposta</string>
+    <string name="controller_sensitivity_label">Multiplicador de Sensibilidade: %s</string>
+    <string name="controller_deadzone_label">Zona Morta (Deadzone) do Analógico: %d%%</string>
+    <string name="controller_vibration_title">Feedback Tátil (Vibração)</string>
+    <string name="controller_vibration_desc">Vibra ao acionar botões ou realizar ações críticas</string>
+    <string name="controller_save_btn">Salvar Configurações de Controle</string>
+    <string name="controller_saved_toast">Configurações de controle salvas com sucesso!</string>
+    <string name="controller_test_title">Área de Teste do Controle (%s)</string>
+    <string name="controller_test_desc">Teste a sensibilidade e os comandos ao vivo:</string>
+    <string name="controller_joystick_axes">Eixos: X=%s, Y=%s (Sens: %s)</string>
+    <string name="controller_tilt_left">Inclinar Esquerda</string>
+    <string name="controller_tilt_right">Inclinar Direita</string>
+    <string name="controller_tilt_front">Inclinar Frente</string>
+    <string name="controller_tilt_back">Inclinar Trás</string>
+    <string name="controller_sim_angle">Ângulo Simulado: X=%s°, Y=%s°</string>
+    <string name="controller_reset_neutral">Resetar Posição Neutra</string>
+    <string name="controller_dpad_up">▲ CIMA</string>
+    <string name="controller_dpad_left">◄ ESQ</string>
+    <string name="controller_dpad_right">DIR ►</string>
+    <string name="controller_dpad_down">▼ BAIXO</string>
+    <string name="controller_last_voice">Último Comando Detectado: \"%s\"</string>
+    <string name="controller_voice_shoot">🎤 \"Atirar\"</string>
+    <string name="controller_voice_jump">🎤 \"Pular\"</string>
+    <string name="controller_voice_run">🎤 \"Correr\"</string>
+    <string name="controller_touch_boost_active">⚡ Touch Sampling Boost Ativo!\nSensibilidade de resposta ao toque otimizada em 1000Hz com taxa de amostragem máxima.</string>
+    <string name="controller_toast_dpad_up">D-Pad: Cima</string>
+    <string name="controller_toast_dpad_left">D-Pad: Esquerda</string>
+    <string name="controller_toast_dpad_right">D-Pad: Direita</string>
+    <string name="controller_toast_dpad_down">D-Pad: Baixo</string>
+    <string name="controller_none_recent">Nenhum comando recente</string>
 </resources>

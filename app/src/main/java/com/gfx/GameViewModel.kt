@@ -909,6 +909,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         if (intent != null) {
+            GameForegroundService.activeGamePackage = packageName
             app.startActivity(intent)
             
             if (oomImmortal.value) {
@@ -937,6 +938,51 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             db.gameProfileDao().insertProfile(GameProfile(packageName, resolution, density))
             loadGames()
+        }
+    }
+
+    fun exportGameConfig(packageName: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val game = _games.value.find { it.packageName == packageName }
+                val gfxConfig = GfxTools.getGfxConfig(app, packageName)
+                val config = mapOf(
+                    "packageName" to packageName,
+                    "gameName" to (game?.name ?: packageName),
+                    "resolution" to (game?.profile?.resolution ?: "1280x720"),
+                    "density" to (game?.profile?.density ?: 320),
+                    "gfx" to gfxConfig
+                )
+                val json = com.google.gson.Gson().toJson(config)
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val file = File(downloadsDir, "${packageName}_config.json")
+                file.writeText(json)
+                withContext(Dispatchers.Main) { onResult(true, app.getString(R.string.game_action_export_success, file.name)) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false, app.getString(R.string.game_action_import_error, e.message ?: "")) }
+            }
+        }
+    }
+
+    fun importGameConfig(uri: Uri, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = app.contentResolver.openInputStream(uri)
+                val json = inputStream?.bufferedReader().use { it?.readText() }
+                if (json == null) throw Exception("Empty file")
+                val config = com.google.gson.Gson().fromJson(json, Map::class.java)
+                val pkg = config["packageName"] as String
+                val res = config["resolution"] as String
+                val dpi = (config["density"] as Double).toInt()
+                val gfx = com.google.gson.Gson().fromJson(com.google.gson.Gson().toJson(config["gfx"]), GfxTools.GfxConfig::class.java)
+
+                db.gameProfileDao().insertProfile(GameProfile(pkg, res, dpi))
+                GfxTools.saveGfxConfig(app, pkg, gfx)
+                loadGames()
+                withContext(Dispatchers.Main) { onResult(true, app.getString(R.string.game_action_import_success)) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false, app.getString(R.string.game_action_import_error, e.message ?: "")) }
+            }
         }
     }
 

@@ -429,4 +429,11 @@
     <string name="preset_webview_gpu_desc">为 HTML5/Canvas/React 游戏强制开启 GPU 硬件光栅化。</string>
     <string name="preset_force_msaa_title">强制 4x MSAA 与 GPU 合成</string>
     <string name="preset_force_msaa_desc">在 OpenGL ES 应用中强制开启 2D GPU 加速与 4x 抗锯齿。</string>
+    <string name="res_reset_resolution_btn">重置分辨率</string>
+    <string name="notification_action_kill_game">结束游戏并恢复分辨率</string>
+    <string name="game_action_export">导出配置 (.json)</string>
+    <string name="game_action_import">导入配置 (.json)</string>
+    <string name="game_action_export_success">配置已导出至 Downloads/%s</string>
+    <string name="game_action_import_success">配置导入并应用成功！</string>
+    <string name="game_action_import_error">导入配置失败：%s</string>
 </resources>

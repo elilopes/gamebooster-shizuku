@@ -429,4 +429,11 @@
     <string name="preset_webview_gpu_desc">Форсирует аппаратную растеризацию для HTML5/Canvas/React игр.</string>
     <string name="preset_force_msaa_title">Включить 4x MSAA и GPU рендеринг</string>
     <string name="preset_force_msaa_desc">Включает 2D ускорение GPU и сглаживание 4x в приложениях OpenGL ES.</string>
+    <string name="res_reset_resolution_btn">Сбросить разрешение</string>
+    <string name="notification_action_kill_game">Закрыть игру и восстановить разрешение</string>
+    <string name="game_action_export">Экспорт конфига (.json)</string>
+    <string name="game_action_import">Импорт конфига (.json)</string>
+    <string name="game_action_export_success">Конфиг экспортирован в Downloads/%s</string>
+    <string name="game_action_import_success">Конфиг импортирован и применен!</string>
+    <string name="game_action_import_error">Ошибка импорта конфига: %s</string>
 </resources>

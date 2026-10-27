@@ -429,4 +429,11 @@
     <string name="preset_webview_gpu_desc">HTML5/Canvas/React 게임을 위해 GPU 래스터화를 강제합니다.</string>
     <string name="preset_force_msaa_title">4x MSAA &amp; GPU 컴포지션 강제</string>
     <string name="preset_force_msaa_desc">OpenGL ES 앱에서 완전한 2D GPU 가속과 4x 안티앨리어싱을 강제합니다.</string>
+    <string name="res_reset_resolution_btn">해상도 재설정</string>
+    <string name="notification_action_kill_game">게임 종료 및 해상도 복원</string>
+    <string name="game_action_export">설정 내보내기 (.json)</string>
+    <string name="game_action_import">설정 가져오기 (.json)</string>
+    <string name="game_action_export_success">Downloads/%s에 설정이 내보내졌습니다.</string>
+    <string name="game_action_import_success">설정을 가져와서 적용했습니다!</string>
+    <string name="game_action_import_error">설정 가져오기 실패: %s</string>
 </resources>

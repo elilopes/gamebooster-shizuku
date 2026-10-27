@@ -429,4 +429,11 @@
     <string name="preset_webview_gpu_desc">HTML5/Canvas/React गेम्स के लिए GPU हार्डवेयर रेखापुंज बाध्य करता है।</string>
     <string name="preset_force_msaa_title">4x MSAA और GPU कंपोजिशन बाध्य करें</string>
     <string name="preset_force_msaa_desc">OpenGL ES अनुप्रयोगों में 2D GPU त्वरण और 4x एंटी-अलियासिंग बाध्य करता है।</string>
+    <string name="res_reset_resolution_btn">रिज़ॉल्यूशन रीसेट करें</string>
+    <string name="notification_action_kill_game">गेम बंद करें और रिज़ॉल्यूशन पुनर्स्थापित करें</string>
+    <string name="game_action_export">कॉन्फ़िगरेशन निर्यात करें (.json)</string>
+    <string name="game_action_import">कॉन्फ़िगरेशन आयात करें (.json)</string>
+    <string name="game_action_export_success">कॉन्फ़िगरेशन Downloads/%s पर निर्यात की गई</string>
+    <string name="game_action_import_success">कॉन्फ़िगरेशन सफलतापूर्वक आयात और लागू की गई!</string>
+    <string name="game_action_import_error">कॉन्फ़िगरेशन आयात करने में विफल: %s</string>
 </resources>

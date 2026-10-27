@@ -429,4 +429,11 @@
     <string name="preset_webview_gpu_desc">Força rasterização GPU e desativa rasterizador por software para jogos em Canvas/HTML5/React.</string>
     <string name="preset_force_msaa_title">Forçar 4x MSAA &amp; Composição por GPU</string>
     <string name="preset_force_msaa_desc">Força aceleração total 2D por GPU e antialiasing 4x em aplicações OpenGL ES.</string>
+    <string name="res_reset_resolution_btn">Resetar resolução</string>
+    <string name="notification_action_kill_game">Fechar Jogo &amp; Restaurar Resolução</string>
+    <string name="game_action_export">Exportar Config (.json)</string>
+    <string name="game_action_import">Importar Config (.json)</string>
+    <string name="game_action_export_success">Config exportada para Downloads/%s</string>
+    <string name="game_action_import_success">Config importada e aplicada com sucesso!</string>
+    <string name="game_action_import_error">Falha ao importar config: %s</string>
 </resources>

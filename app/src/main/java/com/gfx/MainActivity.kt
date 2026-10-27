@@ -1281,6 +1281,12 @@ fun GameListTab(viewModel: GameViewModel) {
     var showActionsDialog by remember { mutableStateOf(false) }
     var actionsTargetGame by remember { mutableStateOf<GameApp?>(null) }
 
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.importGameConfig(it) { success, msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() } }
+    }
+
     val filteredGames = remember(games, searchQuery) {
         if (searchQuery.isBlank()) games
         else games.filter {
@@ -1353,6 +1359,22 @@ fun GameListTab(viewModel: GameViewModel) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val isShizukuGranted by ShizukuHelper.isShizukuGranted.collectAsState()
                             val isBinderAlive by ShizukuHelper.isBinderAlive.collectAsState()
+                            Button(
+                                onClick = {
+                                    Toast.makeText(context, "Resetando resolução...", Toast.LENGTH_SHORT).show()
+                                    viewModel.resetResolutionLive { _, msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.res_reset_resolution_btn),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                             Button(
                                 onClick = {
                                     Toast.makeText(context, context.getString(R.string.checking_shizuku_installed), Toast.LENGTH_SHORT).show()
@@ -1760,6 +1782,28 @@ fun GameListTab(viewModel: GameViewModel) {
                         Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(stringResource(id = R.string.game_verify_ads))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.exportGameConfig(targetGame.packageName) { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
+                            showActionsDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.game_action_export))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showActionsDialog = false
+                            importLauncher.launch(arrayOf("application/json"))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.game_action_import))
                     }
                 }
             },

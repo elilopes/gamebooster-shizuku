@@ -96,6 +96,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val disablePrintSpooler = boostSettings.disablePrintSpooler
     val forceSystemGraphicsDriver = boostSettings.forceSystemGraphicsDriver
     val webViewGameBoost = boostSettings.webViewGameBoost
+    val disable4xMsaa = boostSettings.disable4xMsaa
 
     val adBlockerEnabled = MutableStateFlow(false)
     val adBlockerRealtime = MutableStateFlow(false)
@@ -120,10 +121,62 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // Custom Shell Scripts State (.sh)
     val customScripts = MutableStateFlow<List<CustomScript>>(emptyList())
 
+    /**
+     * [PT-BR] Salva e mantém permanentemente a resolução inicial padrão do dispositivo.
+     */
+    val defaultInitialResolution: String
+        get() {
+            val saved = boostPrefs.getString("default_initial_resolution", null)
+            if (!saved.isNullOrBlank()) return saved
+
+            val res = try {
+                val nat = ShellFunctions.getNativeResolution()
+                if (nat.isNotBlank() && nat != "SHIZUKU_OFF" && !nat.contains("Shizuku off") && !nat.contains("Error")) {
+                    nat
+                } else {
+                    val dm = app.resources.displayMetrics
+                    "${dm.widthPixels}x${dm.heightPixels}"
+                }
+            } catch (_: Exception) {
+                val dm = app.resources.displayMetrics
+                "${dm.widthPixels}x${dm.heightPixels}"
+            }
+            boostPrefs.edit().putString("default_initial_resolution", res).apply()
+            return res
+        }
+
     val nativeResolution: String
-        get() = ShellFunctions.getNativeResolution()
+        get() {
+            val res = ShellFunctions.getNativeResolution()
+            return if (res == "SHIZUKU_OFF" || res.contains("Shizuku off")) {
+                app.getString(R.string.shizuku_off_warning)
+            } else {
+                res
+            }
+        }
+
+    fun isResolutionOnlyForGame(packageName: String): Boolean {
+        return boostPrefs.getBoolean("res_only_game_$packageName", false)
+    }
+
+    fun setResolutionOnlyForGame(packageName: String, onlyGame: Boolean) {
+        boostPrefs.edit().putBoolean("res_only_game_$packageName", onlyGame).apply()
+    }
+
+    fun restoreDefaultResolution(onResult: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val defRes = defaultInitialResolution
+            ShellFunctions.executePrivileged("wm size reset")
+            ShellFunctions.executePrivileged("wm density reset")
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(true, "Resolução padrão inicial ($defRes) restaurada com sucesso!")
+            }
+        }
+    }
 
     init {
+        // Assegura que a resolução padrão inicial seja registrada na primeira inicialização
+        val _initial = defaultInitialResolution
         loadGames()
         scanBackgroundApps()
         loadCustomScripts()
@@ -759,6 +812,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleWebViewGameBoost(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
         boostSettings.toggleWebViewGameBoost(enable, onResult)
+
+    fun toggleDisable4xMsaa(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) =
+        boostSettings.toggleDisable4xMsaa(enable, onResult)
+
+    fun enableAllBoosts(onComplete: () -> Unit) =
+        boostSettings.enableAllBoosts(onComplete)
 
     fun launchGame(packageName: String) {
         if (autoClearCache.value) {

@@ -103,7 +103,7 @@ object ShellFunctions {
     fun getNativeResolution(): String {
         val output = executePrivileged("wm size")
         if (output.contains("Shizuku off") || output.contains("Error") || output.contains("falhou")) {
-            return "Shizuku off, ative-o pra usar estas funções."
+            return "SHIZUKU_OFF"
         }
         return output.substringAfter("Physical size: ").ifEmpty { 
             output.substringAfter("Override size: ").ifEmpty { "1080x1920" } 

@@ -69,12 +69,14 @@ fun ScriptsTab(viewModel: GameViewModel) {
         }
     }
 
-    val filteredScripts = remember(scripts, selectedCategory, searchQuery) {
+    val filteredScripts = remember(scripts, selectedCategory, searchQuery, context) {
         scripts.filter { script ->
             val matchCategory = selectedCategory == null || script.category == selectedCategory
+            val title = script.getLocalizedTitle(context)
+            val desc = script.getLocalizedDescription(context)
             val matchQuery = searchQuery.isBlank() ||
-                    script.title.contains(searchQuery, ignoreCase = true) ||
-                    script.description.contains(searchQuery, ignoreCase = true) ||
+                    title.contains(searchQuery, ignoreCase = true) ||
+                    desc.contains(searchQuery, ignoreCase = true) ||
                     script.scriptContent.contains(searchQuery, ignoreCase = true)
             matchCategory && matchQuery
         }
@@ -178,7 +180,7 @@ fun ScriptsTab(viewModel: GameViewModel) {
                     onClick = {
                         selectedCategory = if (selectedCategory == cat) null else cat
                     },
-                    label = { Text("${cat.iconEmoji} ${cat.displayName} ($count)", fontSize = 11.sp) }
+                    label = { Text("${cat.iconEmoji} ${cat.getLocalizedName(context)} ($count)", fontSize = 11.sp) }
                 )
             }
         }
@@ -200,7 +202,7 @@ fun ScriptsTab(viewModel: GameViewModel) {
                         runningScriptId = script.id
                         viewModel.executeCustomScript(script) { result ->
                             runningScriptId = null
-                            Toast.makeText(context, "Executado: ${script.title}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "${context.getString(R.string.scripts_run_btn)}: ${script.getLocalizedTitle(context)}", Toast.LENGTH_SHORT).show()
                         }
                     },
                     onEdit = {
@@ -411,6 +413,7 @@ fun ScriptItemCard(
     onDelete: () -> Unit,
     onCopy: () -> Unit
 ) {
+    val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
 
     Card(
@@ -439,7 +442,7 @@ fun ScriptItemCard(
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(script.category.colorHex).copy(alpha = 0.5f))
                         ) {
                             Text(
-                                text = "${script.category.iconEmoji} ${script.category.displayName}",
+                                text = "${script.category.iconEmoji} ${script.category.getLocalizedName(context)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(script.category.colorHex),
@@ -480,7 +483,7 @@ fun ScriptItemCard(
 
                     // Nome do Script (SEMPRE VISÍVEL)
                     Text(
-                        text = script.title,
+                        text = script.getLocalizedTitle(context),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -506,9 +509,10 @@ fun ScriptItemCard(
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                 ) {
-                    if (script.description.isNotBlank()) {
+                    val localizedDesc = script.getLocalizedDescription(context)
+                    if (localizedDesc.isNotBlank()) {
                         Text(
-                            text = script.description,
+                            text = localizedDesc,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -601,6 +605,7 @@ fun AddEditScriptDialog(
     onDismiss: () -> Unit,
     onSave: (CustomScript) -> Unit
 ) {
+    val context = LocalContext.current
     var title by remember { mutableStateOf(initialScript?.title ?: "") }
     var description by remember { mutableStateOf(initialScript?.description ?: "") }
     var scriptContent by remember { mutableStateOf(initialScript?.scriptContent ?: "# Digite seus comandos shell aqui\n") }
@@ -650,7 +655,7 @@ fun AddEditScriptDialog(
                         FilterChip(
                             selected = category == cat,
                             onClick = { category = cat },
-                            label = { Text("${cat.iconEmoji} ${cat.displayName}", fontSize = 11.sp) }
+                            label = { Text("${cat.iconEmoji} ${cat.getLocalizedName(context)}", fontSize = 11.sp) }
                         )
                     }
                 }

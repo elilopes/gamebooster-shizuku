@@ -22,6 +22,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun BackupAppTab(viewModel: GameViewModel) {
@@ -30,6 +33,46 @@ fun BackupAppTab(viewModel: GameViewModel) {
     val backupManager = remember { BackupApp(context, scope) }
     var backups by remember { mutableStateOf<List<File>>(emptyList()) }
     var refreshing by remember { mutableStateOf(false) }
+
+    var pendingExportFile by remember { mutableStateOf<File?>(null) }
+    val safExportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null && pendingExportFile != null) {
+            val target = pendingExportFile!!
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val docUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                        treeUri,
+                        android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                    )
+                    val mime = if (target.name.endsWith(".zip", ignoreCase = true)) "application/zip" else "application/octet-stream"
+                    val createdDocUri = android.provider.DocumentsContract.createDocument(
+                        context.contentResolver,
+                        docUri,
+                        mime,
+                        target.name
+                    )
+                    if (createdDocUri != null) {
+                        context.contentResolver.openOutputStream(createdDocUri)?.use { outStream ->
+                            target.inputStream().use { inStream ->
+                                inStream.copyTo(outStream)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, context.getString(R.string.backup_export_saf_success, target.name), Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Erro ao exportar backup via SAF: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                } finally {
+                    pendingExportFile = null
+                }
+            }
+        }
+    }
 
     fun loadBackups() {
         refreshing = true
@@ -104,6 +147,10 @@ fun BackupAppTab(viewModel: GameViewModel) {
                         onDeleted = {
                             Toast.makeText(context, "Backup excluído com sucesso", Toast.LENGTH_SHORT).show()
                             loadBackups()
+                        },
+                        onExportSaf = { toExport ->
+                            pendingExportFile = toExport
+                            safExportLauncher.launch(null)
                         }
                     )
                 }
@@ -118,9 +165,17 @@ fun BackupItemCard(
     packageName: String,
     backupManager: BackupApp,
     onRestored: (Boolean, String) -> Unit,
-    onDeleted: () -> Unit
+    onDeleted: () -> Unit,
+    onExportSaf: (File) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val formattedDate = remember(file) {
+        try {
+            SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date(file.lastModified()))
+        } catch (_: Exception) {
+            ""
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -143,6 +198,14 @@ fun BackupItemCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (formattedDate.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(id = R.string.backup_date_time_label, formattedDate),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
                 IconButton(
                     onClick = {
@@ -159,7 +222,25 @@ fun BackupItemCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = { onExportSaf(file) },
+                modifier = Modifier.fillMaxWidth().testTag("export_saf_${file.name}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(id = R.string.backup_export_saf_btn),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

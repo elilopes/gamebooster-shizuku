@@ -98,6 +98,9 @@ class BoostSettings(
     /** [PT-BR] Estado da aceleração de jogos Web / WebView (GPU Rasterization, Zero-Copy e Sandboxed Boost). [EN] Web / WebView Game Boost state. */
     val webViewGameBoost = MutableStateFlow(false)
 
+    /** [PT-BR] Estado de desativação de 4x MSAA forçado. [EN] Disable forced 4x MSAA state. */
+    val disable4xMsaa = MutableStateFlow(false)
+
     init {
         loadBoostSettings()
     }
@@ -125,6 +128,7 @@ class BoostSettings(
             disablePrintSpooler.value = boostPrefs.getBoolean("disablePrintSpooler", false)
             forceSystemGraphicsDriver.value = boostPrefs.getBoolean("forceSystemGraphicsDriver", false)
             webViewGameBoost.value = boostPrefs.getBoolean("webViewGameBoost", false)
+            disable4xMsaa.value = boostPrefs.getBoolean("disable4xMsaa", false)
         } catch (e: Exception) {
             dispatchAlert("Erro ao carregar configurações de boost salvas: ${e.message}", e)
         }
@@ -893,5 +897,73 @@ class BoostSettings(
                 }
             }
         }
+    }
+
+    /**
+     * [PT-BR] Alterna a desativação forçada de 4x MSAA para maximizar a taxa de quadros (FPS).
+     * [EN] Toggles disabling forced 4x MSAA to maximize framerate (FPS).
+     */
+    fun toggleDisable4xMsaa(enable: Boolean, onResult: ((Boolean, String) -> Unit)? = null) {
+        if (!hasPrivilege()) {
+            disable4xMsaa.value = false
+            boostPrefs.edit().putBoolean("disable4xMsaa", false).apply()
+            val msg = "Shizuku/Root inativo. Ative o Shizuku ou liberte acesso Root para usar esta função."
+            dispatchAlert(msg)
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        disable4xMsaa.value = enable
+        boostPrefs.edit().putBoolean("disable4xMsaa", enable).apply()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                if (enable) {
+                    ShellFunctions.executePrivileged("setprop debug.egl.force_msaa 0")
+                    ShellFunctions.executePrivileged("settings put global debug.egl.force_msaa 0")
+                    ShellFunctions.executePrivileged("setprop persist.sys.egl.force_msaa 0")
+                } else {
+                    ShellFunctions.executePrivileged("settings delete global debug.egl.force_msaa")
+                    ShellFunctions.executePrivileged("setprop debug.egl.force_msaa 0")
+                }
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(true, if (enable) "Desativação de 4x MSAA ativada!" else "Desativação de 4x MSAA desativada.")
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    disable4xMsaa.value = false
+                    boostPrefs.edit().putBoolean("disable4xMsaa", false).apply()
+                    val msg = "Erro ao configurar 4x MSAA: ${e.message}"
+                    dispatchAlert(msg, e)
+                    onResult?.invoke(false, msg)
+                }
+            }
+        }
+    }
+
+    /**
+     * [PT-BR] Ativa todas as configurações e modos de boost simultaneamente.
+     * [EN] Enables all boost configurations and modes simultaneously.
+     */
+    fun enableAllBoosts(onComplete: () -> Unit) {
+        toggleNativeGameMode(true)
+        toggleForceSystemGraphicsDriver(true)
+        toggleWebViewGameBoost(true)
+        toggleBlockNotificationsGamer(true)
+        toggleReduceLoggerBuffer(true)
+        toggleDisablePrintSpooler(true)
+        toggleForceMaxCpu(true)
+        toggleForceMaxGpu(true)
+        toggleDisableAnimations(true)
+        toggleHighTouchSampling(true)
+        toggleLimitBackgroundProcesses(true)
+        toggleBlockAutoRestart(true)
+        toggleForceDeepSleepCache(true)
+        toggleThermalBoost(true)
+        toggleDisableOverlays(true)
+        toggleAutoClearCache(true)
+        toggleOomImmortal(true)
+        toggleDisable4xMsaa(true)
+        onComplete()
     }
 }

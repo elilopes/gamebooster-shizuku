@@ -137,7 +137,7 @@
     <string name="game_save_permanent">Сохранить навсегда</string>
     <string name="game_test_res_desc">Тест разрешения в реальном времени:</string>
     <string name="game_res_input_label">Разрешение (ШхВ, например 1280x720)</string>
-    <string name="game_test_live">Тест вживую</string>
+    <string name="game_test_live">Тест на Android</string>
     <string name="game_reset">Сброс</string>
     <string name="game_res_profile_title">Профиль разрешения</string>
     <string name="game_img_compactor_title">Компрессор изображений</string>
@@ -384,4 +384,49 @@
     <string name="controller_toast_dpad_right">D-Pad: Вправо</string>
     <string name="controller_toast_dpad_down">D-Pad: Вниз</string>
     <string name="controller_none_recent">Нет недавних команд</string>
+
+    <!-- Новые функции -->
+    <string name="search_games_placeholder">Поиск игры или пакета…</string>
+    <string name="shizuku_off_warning">Shizuku выключен, включите его для использования этих функций.</string>
+    <string name="boost_disable_4x_msaa_title">Отключить 4x MSAA</string>
+    <string name="boost_disable_4x_msaa_desc">Отключает принудительное сглаживание 4x MSAA для максимального FPS и снижения нагрузки на GPU.</string>
+    <string name="boost_enable_all_btn">Включить все бусты</string>
+    <string name="boost_enable_all_success">Все параметры буста успешно включены!</string>
+    <string name="res_default_device_title">Исходное стандартное разрешение экрана:</string>
+    <string name="res_restore_default_btn">Восстановить исходное разрешение</string>
+    <string name="res_only_game_title">Изменять разрешение только для игры</string>
+    <string name="res_only_game_desc">Применять разрешение только во время работы этой игры</string>
+    <string name="logs_export_btn">Экспорт лога (.txt)</string>
+    <string name="logs_export_success">Лог успешно экспортирован в Downloads/%s</string>
+    <string name="logs_export_error">Ошибка экспорта лога: %s</string>
+    <string name="backup_export_saf_btn">Экспорт во внешнюю папку (SAF)</string>
+    <string name="backup_export_saf_success">Бэкап \"%s\" успешно экспортирован!</string>
+    <string name="backup_date_time_label">Дата/Время: %s</string>
+
+    <!-- Пресеты скриптов и Категории -->
+    <string name="category_performance">Производительность</string>
+    <string name="category_graphics">Графика и FPS</string>
+    <string name="category_memory">Память и ОЗУ</string>
+    <string name="category_system">Система и Ядро</string>
+    <string name="category_network">Сеть и Пинг</string>
+    <string name="category_custom">Свой скрипт</string>
+
+    <string name="preset_120hz_title">Частота 120 Гц и Макс FPS</string>
+    <string name="preset_120hz_desc">Фиксирует экран на 120 Гц и отключает динамические ограничители FPS.</string>
+    <string name="preset_ram_clean_title">Агрессивная очистка ОЗУ и кэша</string>
+    <string name="preset_ram_clean_desc">Сбрасывает отложенную запись, очищает кэш страниц памяти и swap.</string>
+    <string name="preset_skia_vk_title">Форсировать рендерер Skia Vulkan</string>
+    <string name="preset_skia_vk_desc">Переключает графический пайплайн на Vulkan (SkiaVK) для снижения оверхеда.</string>
+    <string name="preset_reduce_logger_title">Снизить оверхед системных логов</string>
+    <string name="preset_reduce_logger_desc">Уменьшает буфер логов до 64 КБ и отключает тяжелое логирование.</string>
+    <string name="preset_disable_spooler_title">Отключить диспетчер печати</string>
+    <string name="preset_disable_spooler_desc">Отключает фоновый поиск принтеров, экономя заряд батареи и ресурсы процессора.</string>
+    <string name="preset_fixed_performance_title">Режим фиксированной производительности</string>
+    <string name="preset_fixed_performance_desc">Активирует нативный режим стабильной производительности CPU/GPU в Android.</string>
+    <string name="preset_network_tweaks_title">Оптимизация задержки сети (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">Увеличивает сетевые буферы TCP для Wi-Fi и отключает ECN для стабильного пинга.</string>
+    <string name="preset_webview_gpu_title">GPU ускорение для Web / WebView игр</string>
+    <string name="preset_webview_gpu_desc">Форсирует аппаратную растеризацию для HTML5/Canvas/React игр.</string>
+    <string name="preset_force_msaa_title">Включить 4x MSAA и GPU рендеринг</string>
+    <string name="preset_force_msaa_desc">Включает 2D ускорение GPU и сглаживание 4x в приложениях OpenGL ES.</string>
 </resources>

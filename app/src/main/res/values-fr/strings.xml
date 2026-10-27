@@ -137,7 +137,7 @@
     <string name="game_save_permanent">Enregistrer définitivement</string>
     <string name="game_test_res_desc">Tester la résolution en direct :</string>
     <string name="game_res_input_label">Résolution (Largeur x Hauteur)</string>
-    <string name="game_test_live">Test en direct</string>
+    <string name="game_test_live">Tester sur Android</string>
     <string name="game_reset">Réinitialiser</string>
     <string name="game_res_profile_title">Profil de résolution</string>
     <string name="game_img_compactor_title">Compresseur d\'images</string>
@@ -384,4 +384,49 @@
     <string name="controller_toast_dpad_right">D-Pad : Droite</string>
     <string name="controller_toast_dpad_down">D-Pad : Bas</string>
     <string name="controller_none_recent">Aucune commande récente</string>
+
+    <!-- Nouvelles fonctionnalités -->
+    <string name="search_games_placeholder">Rechercher un jeu ou un package…</string>
+    <string name="shizuku_off_warning">Shizuku est désactivé, activez-le pour utiliser ces fonctions.</string>
+    <string name="boost_disable_4x_msaa_title">Désactiver 4x MSAA</string>
+    <string name="boost_disable_4x_msaa_desc">Désactive l\'anticrénelage 4x MSAA forcé pour maximiser le FPS et réduire la charge du GPU.</string>
+    <string name="boost_enable_all_btn">Activer tous les boosts</string>
+    <string name="boost_enable_all_success">Tous les boosts ont été activés avec succès !</string>
+    <string name="res_default_device_title">Résolution initiale par défaut du téléphone :</string>
+    <string name="res_restore_default_btn">Restaurer la résolution par défaut</string>
+    <string name="res_only_game_title">Changer la résolution uniquement pour le jeu</string>
+    <string name="res_only_game_desc">Appliquer la résolution uniquement lorsque ce jeu est en cours d\'exécution</string>
+    <string name="logs_export_btn">Exporter le journal (.txt)</string>
+    <string name="logs_export_success">Journal exporté avec succès dans Downloads/%s</string>
+    <string name="logs_export_error">Échec de l\'exportation du journal : %s</string>
+    <string name="backup_export_saf_btn">Exporter vers un dossier externe (SAF)</string>
+    <string name="backup_export_saf_success">Sauvegarde \"%s\" exportée avec succès !</string>
+    <string name="backup_date_time_label">Date/Heure : %s</string>
+
+    <!-- Préréglages de scripts et catégories -->
+    <string name="category_performance">Performance</string>
+    <string name="category_graphics">Graphismes &amp; FPS</string>
+    <string name="category_memory">Mémoire &amp; RAM</string>
+    <string name="category_system">Système &amp; Noyau</string>
+    <string name="category_network">Réseau &amp; Ping</string>
+    <string name="category_custom">Personnalisé</string>
+
+    <string name="preset_120hz_title">Taux de rafraîchissement 120Hz &amp; Max FPS</string>
+    <string name="preset_120hz_desc">Verrouille l\'écran à 120Hz et désactive les limiteurs dynamiques de FPS.</string>
+    <string name="preset_ram_clean_title">Nettoyage agressif de la RAM et du cache</string>
+    <string name="preset_ram_clean_desc">Synchronise les écritures en attente et libère les caches mémoire.</string>
+    <string name="preset_skia_vk_title">Forcer le moteur de rendu Skia Vulkan</string>
+    <string name="preset_skia_vk_desc">Bascule le pipeline HWUI vers Vulkan (SkiaVK) pour réduire la surcharge des draw calls.</string>
+    <string name="preset_reduce_logger_title">Réduire la charge des journaux système</string>
+    <string name="preset_reduce_logger_desc">Réduit la taille du tampon à 64 Ko et désactive la journalisation lourde.</string>
+    <string name="preset_disable_spooler_title">Désactiver le spouleur d\'impression</string>
+    <string name="preset_disable_spooler_desc">Désactive le service d\'impression pour économiser la batterie et le processeur.</string>
+    <string name="preset_fixed_performance_title">Mode performance fixe (Android OS Core)</string>
+    <string name="preset_fixed_performance_desc">Active le mode de performance stable natif d\'Android sur CPU/GPU.</string>
+    <string name="preset_network_tweaks_title">Optimiser la latence réseau (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">Augmente les tampons TCP pour le Wi-Fi et désactive ECN pour réduire le ping.</string>
+    <string name="preset_webview_gpu_title">Accélération GPU pour jeux Web / WebView</string>
+    <string name="preset_webview_gpu_desc">Force la rastérisation GPU pour les jeux HTML5/Canvas/React.</string>
+    <string name="preset_force_msaa_title">Forcer 4x MSAA et la composition GPU</string>
+    <string name="preset_force_msaa_desc">Force l\'accélération 2D totale par GPU et l\'anticrénelage 4x dans OpenGL ES.</string>
 </resources>

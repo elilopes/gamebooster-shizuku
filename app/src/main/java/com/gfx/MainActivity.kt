@@ -58,6 +58,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
+import android.os.Environment
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Clear
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
@@ -1063,6 +1070,44 @@ fun LogsDialog(onDismiss: () -> Unit) {
                     Text(stringResource(id = R.string.logs_copy))
                 }
 
+                // Botão para exportar log em .txt na pasta Downloads
+                TextButton(
+                    onClick = {
+                        val textToExport = when (selectedTab) {
+                            0 -> logs.joinToString("\n")
+                            1 -> systemLogcat ?: ""
+                            2 -> crashHistory.joinToString("\n")
+                            else -> ""
+                        }
+                        if (textToExport.isBlank()) {
+                            Toast.makeText(context, "Nenhum log para exportar", Toast.LENGTH_SHORT).show()
+                            return@TextButton
+                        }
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                val tabName = when (selectedTab) { 0 -> "console"; 1 -> "logcat"; else -> "crashes" }
+                                val fileName = "GameBooster_Log_${tabName}_$timeStamp.txt"
+                                val targetFile = File(downloadsDir, fileName)
+                                targetFile.writeText(textToExport)
+                                withContext(Dispatchers.Main) {
+                                    val msg = context.getString(R.string.logs_export_success, fileName)
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    val err = context.getString(R.string.logs_export_error, e.message ?: "")
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text(stringResource(id = R.string.logs_export_btn))
+                }
+
                 // Botão para limpar conteúdo
                 TextButton(
                     onClick = {
@@ -1220,6 +1265,7 @@ fun GameListTab(viewModel: GameViewModel) {
     var gfxApplyResultMsg by remember { mutableStateOf<String?>(null) }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     var customResolutionInput by remember { mutableStateOf("1280x720") }
     var customDensityInput by remember { mutableStateOf("320") }
@@ -1234,6 +1280,14 @@ fun GameListTab(viewModel: GameViewModel) {
 
     var showActionsDialog by remember { mutableStateOf(false) }
     var actionsTargetGame by remember { mutableStateOf<GameApp?>(null) }
+
+    val filteredGames = remember(games, searchQuery) {
+        if (searchQuery.isBlank()) games
+        else games.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+            it.packageName.contains(searchQuery, ignoreCase = true)
+        }
+    }
 
     LazyColumn(modifier = Modifier.padding(16.dp)) {
         item {
@@ -1382,7 +1436,33 @@ fun GameListTab(viewModel: GameViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        if (games.isEmpty()) {
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text(stringResource(id = R.string.search_games_placeholder)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Limpar")
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            )
+        }
+
+        if (filteredGames.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier
@@ -1419,7 +1499,7 @@ fun GameListTab(viewModel: GameViewModel) {
             }
         }
 
-        items(games) { game ->
+        items(filteredGames) { game ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1937,13 +2017,88 @@ fun GameListTab(viewModel: GameViewModel) {
     }
 
     if (showDialog && selectedGame != null) {
+        var onlyForGame by remember(selectedGame) {
+            mutableStateOf(viewModel.isResolutionOnlyForGame(selectedGame!!.packageName))
+        }
+
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("${stringResource(id = R.string.game_res_profile_title)}: ${selectedGame?.name}") },
             text = {
-                Column {
-                    Text(stringResource(id = R.string.game_test_res_desc))
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    // Caixa com a Resolução Inicial Padrão do Celular
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = stringResource(id = R.string.res_default_device_title),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = viewModel.defaultInitialResolution,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.restoreDefaultResolution { _, msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.res_restore_default_btn),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+
+                    // Opção para mudar resolução apenas do jogo
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(id = R.string.res_only_game_title),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = stringResource(id = R.string.res_only_game_desc),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = onlyForGame,
+                                onCheckedChange = { onlyForGame = it }
+                            )
+                        }
+                    }
+
+                    Text(stringResource(id = R.string.game_test_res_desc), style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = customResolutionInput,
                         onValueChange = { customResolutionInput = it },
@@ -2006,6 +2161,7 @@ fun GameListTab(viewModel: GameViewModel) {
                 TextButton(onClick = {
                     val parts = customResolutionInput.trim().split("x")
                     val dpi = customDensityInput.trim().toIntOrNull() ?: 320
+                    viewModel.setResolutionOnlyForGame(selectedGame!!.packageName, onlyForGame)
                     if (parts.size == 2) {
                         viewModel.saveProfile(selectedGame!!.packageName, customResolutionInput.trim(), dpi)
                     }
@@ -2951,6 +3107,7 @@ fun BackgroundAppsTab(viewModel: GameViewModel) {
 
 @Composable
 fun BoostSettingsTab(viewModel: GameViewModel) {
+    val context = LocalContext.current
     val thermalBoost by viewModel.thermalBoost.collectAsState()
     val disableOverlays by viewModel.disableOverlays.collectAsState()
     val autoClearCache by viewModel.autoClearCache.collectAsState()
@@ -2970,6 +3127,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     val disablePrintSpooler by viewModel.disablePrintSpooler.collectAsState()
     val forceSystemGraphicsDriver by viewModel.forceSystemGraphicsDriver.collectAsState()
     val webViewGameBoost by viewModel.webViewGameBoost.collectAsState()
+    val disable4xMsaa by viewModel.disable4xMsaa.collectAsState()
 
     var showInfoDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showVmDialog by remember { mutableStateOf(false) }
@@ -2988,6 +3146,32 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
         }
+
+        // Botão Ativar Todos os Boosts
+        Button(
+            onClick = {
+                viewModel.enableAllBoosts {
+                    Toast.makeText(context, context.getString(R.string.boost_enable_all_success), Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(id = R.string.boost_enable_all_btn), style = MaterialTheme.typography.labelLarge)
+        }
+
+        SettingItem(
+            title = stringResource(id = R.string.boost_disable_4x_msaa_title),
+            checked = disable4xMsaa,
+            onCheckedChange = { viewModel.toggleDisable4xMsaa(it) },
+            titleRes = R.string.boost_disable_4x_msaa_title,
+            descRes = R.string.boost_disable_4x_msaa_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
 
         SettingItem(
             title = stringResource(id = R.string.boost_native_game_mode_title),

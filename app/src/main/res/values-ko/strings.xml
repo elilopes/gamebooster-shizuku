@@ -137,7 +137,7 @@
     <string name="game_save_permanent">영구 저장</string>
     <string name="game_test_res_desc">실시간 해상도 테스트:</string>
     <string name="game_res_input_label">해상도 (예: 1280x720)</string>
-    <string name="game_test_live">라이브 테스트</string>
+    <string name="game_test_live">Android에서 테스트</string>
     <string name="game_reset">재설정</string>
     <string name="game_res_profile_title">해상도 프로필</string>
     <string name="game_img_compactor_title">이미지 압축기</string>
@@ -384,4 +384,49 @@
     <string name="controller_toast_dpad_right">D-Pad: 오른쪽</string>
     <string name="controller_toast_dpad_down">D-Pad: 아래</string>
     <string name="controller_none_recent">최근 명령 없음</string>
+
+    <!-- 신규 기능 -->
+    <string name="search_games_placeholder">게임 또는 패키지 검색…</string>
+    <string name="shizuku_off_warning">Shizuku 꺼짐, 이 기능을 사용하려면 활성화하세요.</string>
+    <string name="boost_disable_4x_msaa_title">4x MSAA 비활성화</string>
+    <string name="boost_disable_4x_msaa_desc">강제 4x MSAA 안티앨리어싱을 비활성화하여 FPS를 극대화하고 GPU 부하를 줄입니다.</string>
+    <string name="boost_enable_all_btn">모든 부스트 활성화</string>
+    <string name="boost_enable_all_success">모든 부스트 기능이 활성화되었습니다!</string>
+    <string name="res_default_device_title">휴대폰 기본 초기 해상도:</string>
+    <string name="res_restore_default_btn">기본 해상도로 복원</string>
+    <string name="res_only_game_title">게임에만 해상도 적용</string>
+    <string name="res_only_game_desc">이 게임이 실행 중일 때만 해상도를 적용합니다</string>
+    <string name="logs_export_btn">로그 내보내기 (.txt)</string>
+    <string name="logs_export_success">로그가 Downloads/%s 로 내보내졌습니다.</string>
+    <string name="logs_export_error">로그 내보내기 실패: %s</string>
+    <string name="backup_export_saf_btn">외부 폴더로 내보내기 (SAF)</string>
+    <string name="backup_export_saf_success">백업 \"%s\" 이(가) 성공적으로 내보내졌습니다!</string>
+    <string name="backup_date_time_label">날짜/시간: %s</string>
+
+    <!-- 스크립트 프리셋 및 카테고리 -->
+    <string name="category_performance">성능</string>
+    <string name="category_graphics">그래픽 &amp; FPS</string>
+    <string name="category_memory">메모리 &amp; RAM</string>
+    <string name="category_system">시스템 &amp; 커널</string>
+    <string name="category_network">네트워크 &amp; 핑</string>
+    <string name="category_custom">사용자 지정</string>
+
+    <string name="preset_120hz_title">120Hz 주사율 &amp; 최대 FPS</string>
+    <string name="preset_120hz_desc">화면을 최대 120Hz로 고정하고 시스템 동적 FPS 리미터를 비활성화합니다.</string>
+    <string name="preset_ram_clean_title">공격적인 RAM &amp; 캐시 정리</string>
+    <string name="preset_ram_clean_desc">대기 중인 쓰기 작업을 동기화하고 메모리 페이지 캐시를 비웁니다.</string>
+    <string name="preset_skia_vk_title">Skia Vulkan 렌더러 강제</string>
+    <string name="preset_skia_vk_desc">그래픽 파이프라인을 Vulkan(SkiaVK)으로 전환하여 드로우 콜 오버헤드를 줄입니다.</string>
+    <string name="preset_reduce_logger_title">시스템 로그 오버헤드 감소</string>
+    <string name="preset_reduce_logger_desc">로그 버퍼 크기를 64KB로 줄이고 무거운 영구 로깅을 비활성화합니다.</string>
+    <string name="preset_disable_spooler_title">인쇄 스풀러 비활성화</string>
+    <string name="preset_disable_spooler_desc">백그라운드 프린터 검색 인쇄 서비스를 비활성화하여 배터리와 CPU를 절약합니다.</string>
+    <string name="preset_fixed_performance_title">고정 성능 모드 (Android OS Core)</string>
+    <string name="preset_fixed_performance_desc">Android 전원 서비스의 네이티브 고정 성능 모드 플래그를 활성화합니다.</string>
+    <string name="preset_network_tweaks_title">네트워크 지연 최적화 (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">Wi-Fi TCP 버퍼를 확장하고 ECN을 꺼서 핑 편차를 최소화합니다.</string>
+    <string name="preset_webview_gpu_title">웹 / WebView 게임용 GPU 가속</string>
+    <string name="preset_webview_gpu_desc">HTML5/Canvas/React 게임을 위해 GPU 래스터화를 강제합니다.</string>
+    <string name="preset_force_msaa_title">4x MSAA &amp; GPU 컴포지션 강제</string>
+    <string name="preset_force_msaa_desc">OpenGL ES 앱에서 완전한 2D GPU 가속과 4x 안티앨리어싱을 강제합니다.</string>
 </resources>

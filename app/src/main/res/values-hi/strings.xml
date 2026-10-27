@@ -137,7 +137,7 @@
     <string name="game_save_permanent">स्थाई रूप से सहेजें</string>
     <string name="game_test_res_desc">सहेजने से पहले परीक्षण करें:</string>
     <string name="game_res_input_label">रिज़ॉल्यूशन (चौड़ाई x ऊंचाई)</string>
-    <string name="game_test_live">लाइव टेस्ट</string>
+    <string name="game_test_live">Android पर परीक्षण</string>
     <string name="game_reset">रीसेट</string>
     <string name="game_res_profile_title">रिज़ॉल्यूशन प्रोफ़ाइल</string>
     <string name="game_img_compactor_title">छवि कंपراسر</string>
@@ -384,4 +384,49 @@
     <string name="controller_toast_dpad_right">D-Pad: दाएं</string>
     <string name="controller_toast_dpad_down">D-Pad: नीचे</string>
     <string name="controller_none_recent">कोई हालिया कमांड नहीं</string>
+
+    <!-- नई सुविधाएं -->
+    <string name="search_games_placeholder">गेम या पैकेज खोजें…</string>
+    <string name="shizuku_off_warning">Shizuku बंद है, इन सुविधाओं का उपयोग करने के लिए इसे सक्रिय करें।</string>
+    <string name="boost_disable_4x_msaa_title">4x MSAA अक्षम करें</string>
+    <string name="boost_disable_4x_msaa_desc">FPS को अधिकतम करने और GPU लोड को कम करने के लिए जबरन 4x MSAA एंटी-अलियासिंग को अक्षम करता है।</string>
+    <string name="boost_enable_all_btn">सभी बूस्ट सक्षम करें</string>
+    <string name="boost_enable_all_success">सभी बूस्ट सेटिंग्स सफलतापूर्वक सक्रिय हो गईं!</string>
+    <string name="res_default_device_title">फ़ोन का डिफ़ॉल्ट प्रारंभिक रिज़ॉल्यूशन:</string>
+    <string name="res_restore_default_btn">डिफ़ॉल्ट रिज़ॉल्यूशन पुनर्स्थापित करें</string>
+    <string name="res_only_game_title">केवल गेम के लिए रिज़ॉल्यूशन बदलें</string>
+    <string name="res_only_game_desc">केवल तभी रिज़ॉल्यूशन लागू करें जब यह गेम अग्रभूमि में चल रहा हो</string>
+    <string name="logs_export_btn">लॉग निर्यात करें (.txt)</string>
+    <string name="logs_export_success">लॉग सफलतापूर्वक Downloads/%s पर निर्यात किया गया</string>
+    <string name="logs_export_error">लॉग निर्यात करने में विफल: %s</string>
+    <string name="backup_export_saf_btn">बाहरी फ़ोल्डर में निर्यात करें (SAF)</string>
+    <string name="backup_export_saf_success">बैकअप \"%s\" सफलतापूर्वक निर्यात किया गया!</string>
+    <string name="backup_date_time_label">दिनांक/समय: %s</string>
+
+    <!-- स्क्रिप्ट प्रीसेट और श्रेणियां -->
+    <string name="category_performance">प्रदर्शन</string>
+    <string name="category_graphics">ग्राफिक्स और FPS</string>
+    <string name="category_memory">मेमोरी और RAM</string>
+    <string name="category_system">सिस्टम और कर्नेल</string>
+    <string name="category_network">नेटवर्क और पिंग</string>
+    <string name="category_custom">कस्टम</string>
+
+    <string name="preset_120hz_title">120Hz रिफ्रेश रेट और मैक्स FPS</string>
+    <string name="preset_120hz_desc">स्क्रीन को 120Hz पर लॉक करता है और सिस्टम डायनामिक लिमिटर्स को अक्षम करता है।</string>
+    <string name="preset_ram_clean_title">आक्रामक RAM और कैश सफाई</string>
+    <string name="preset_ram_clean_desc">लंबित कार्यों को सिंक करता है और अप्रयुक्त मेमोरी कैश और स्वैप साफ़ करता है।</string>
+    <string name="preset_skia_vk_title">Skia Vulkan रेंडरर लागू करें</string>
+    <string name="preset_skia_vk_desc">कम ड्रा कॉल ओवरहेड के लिए ग्राफिक्स पाइपलाइन को Vulkan में बदलता है।</string>
+    <string name="preset_reduce_logger_title">सिस्टम लॉग ओवरहेड कम करें</string>
+    <string name="preset_reduce_logger_desc">लॉग बफर आकार को 64KB तक घटाता है और भारी राइटिंग बंद करता है।</string>
+    <string name="preset_disable_spooler_title">प्रिंट स्पूलर अक्षम करें</string>
+    <string name="preset_disable_spooler_desc">बैटरी और CPU बचाने के लिए बैकग्राउंड प्रिंट सेवा बंद करता है।</string>
+    <string name="preset_fixed_performance_title">फिक्स्ड परफॉर्मेंस मोड (Android OS Core)</string>
+    <string name="preset_fixed_performance_desc">स्थिर CPU/GPU आवृत्तियों के लिए Android पावर सर्विस फ्लैग सक्षम करता है।</string>
+    <string name="preset_network_tweaks_title">नेटवर्क लेटेंसी अनुकूलित करें (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">Wi-Fi TCP बफर बढ़ाता है और पिंग स्थिरता के लिए ECN बंद करता है।</string>
+    <string name="preset_webview_gpu_title">Web / WebView गेम्स के लिए GPU त्वरण</string>
+    <string name="preset_webview_gpu_desc">HTML5/Canvas/React गेम्स के लिए GPU हार्डवेयर रेखापुंज बाध्य करता है।</string>
+    <string name="preset_force_msaa_title">4x MSAA और GPU कंपोजिशन बाध्य करें</string>
+    <string name="preset_force_msaa_desc">OpenGL ES अनुप्रयोगों में 2D GPU त्वरण और 4x एंटी-अलियासिंग बाध्य करता है।</string>
 </resources>

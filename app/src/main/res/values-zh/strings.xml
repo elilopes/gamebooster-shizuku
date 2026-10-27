@@ -137,7 +137,7 @@
     <string name="game_save_permanent">永久保存</string>
     <string name="game_test_res_desc">保存前实时测试分辨率：</string>
     <string name="game_res_input_label">分辨率 (宽x高 如 1280x720)</string>
-    <string name="game_test_live">实时测试</string>
+    <string name="game_test_live">在 Android 上测试</string>
     <string name="game_reset">重置</string>
     <string name="game_res_profile_title">分辨率配置文件</string>
     <string name="game_img_compactor_title">图像压缩器</string>
@@ -384,4 +384,49 @@
     <string name="controller_toast_dpad_right">D-Pad: 右</string>
     <string name="controller_toast_dpad_down">D-Pad: 下</string>
     <string name="controller_none_recent">暂无最近命令</string>
+
+    <!-- 新功能 -->
+    <string name="search_games_placeholder">搜索游戏或包名…</string>
+    <string name="shizuku_off_warning">Shizuku 已关闭，请激活后使用此功能。</string>
+    <string name="boost_disable_4x_msaa_title">禁用 4x MSAA</string>
+    <string name="boost_disable_4x_msaa_desc">禁用强制 4x MSAA 抗锯齿以大幅提升游戏 FPS 并降低 GPU 功耗。</string>
+    <string name="boost_enable_all_btn">启用所有加速</string>
+    <string name="boost_enable_all_success">已成功启用所有加速选项！</string>
+    <string name="res_default_device_title">手机默认初始分辨率：</string>
+    <string name="res_restore_default_btn">恢复手机默认分辨率</string>
+    <string name="res_only_game_title">仅对游戏修改分辨率</string>
+    <string name="res_only_game_desc">仅在此游戏在前台运行时生效修改后的分辨率</string>
+    <string name="logs_export_btn">导出日志 (.txt)</string>
+    <string name="logs_export_success">日志已成功导出至 Downloads/%s</string>
+    <string name="logs_export_error">导出日志失败：%s</string>
+    <string name="backup_export_saf_btn">导出到外部文件夹 (SAF)</string>
+    <string name="backup_export_saf_success">备份 \"%s\" 导出成功！</string>
+    <string name="backup_date_time_label">日期/时间：%s</string>
+
+    <!-- 脚本预设与分类 -->
+    <string name="category_performance">性能</string>
+    <string name="category_graphics">图形与帧率</string>
+    <string name="category_memory">内存与运行</string>
+    <string name="category_system">系统与内核</string>
+    <string name="category_network">网络与延迟</string>
+    <string name="category_custom">自定义</string>
+
+    <string name="preset_120hz_title">120Hz 刷新率与最大帧率</string>
+    <string name="preset_120hz_desc">将屏幕锁定为 120Hz 并禁用系统动态帧率限制。</string>
+    <string name="preset_ram_clean_title">深度清理内存与缓存</string>
+    <string name="preset_ram_clean_desc">同步写入缓存并释放页面内存缓存及 Swap。</string>
+    <string name="preset_skia_vk_title">强制使用 Skia Vulkan 渲染器</string>
+    <string name="preset_skia_vk_desc">将 HWUI 图形管线切换为 Vulkan (SkiaVK) 以减少 CPU DrawCall 开销。</string>
+    <string name="preset_reduce_logger_title">减少系统日志开销</string>
+    <string name="preset_reduce_logger_desc">将系统日志缓冲区减少至 64KB 并禁用冗余写入。</string>
+    <string name="preset_disable_spooler_title">禁用打印后台服务</string>
+    <string name="preset_disable_spooler_desc">禁用打印服务，防止后台搜索打印机消耗电量和 CPU。</string>
+    <string name="preset_fixed_performance_title">固定性能模式 (Android OS Core)</string>
+    <string name="preset_fixed_performance_desc">启用 Android 原生电源服务的固定高稳定性性能模式。</string>
+    <string name="preset_network_tweaks_title">优化网络延迟 (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">增大 Wi-Fi TCP 网络缓冲区并关闭 ECN 降低延迟抖动。</string>
+    <string name="preset_webview_gpu_title">网页 / WebView 游戏 GPU 加速</string>
+    <string name="preset_webview_gpu_desc">为 HTML5/Canvas/React 游戏强制开启 GPU 硬件光栅化。</string>
+    <string name="preset_force_msaa_title">强制 4x MSAA 与 GPU 合成</string>
+    <string name="preset_force_msaa_desc">在 OpenGL ES 应用中强制开启 2D GPU 加速与 4x 抗锯齿。</string>
 </resources>

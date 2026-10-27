@@ -135,7 +135,7 @@
     <string name="game_save_permanent">Save Permanently</string>
     <string name="game_test_res_desc">Test resolution live before saving permanently:</string>
     <string name="game_res_input_label">Resolution (Width x Height e.g. 1280x720)</string>
-    <string name="game_test_live">Test Live</string>
+    <string name="game_test_live">Test on Android</string>
     <string name="game_reset">Reset</string>
     <string name="game_res_profile_title">Resolution Profile</string>
     <string name="game_img_compactor_title">Image Compactor</string>
@@ -383,4 +383,49 @@
     <string name="controller_toast_dpad_right">D-Pad: Right</string>
     <string name="controller_toast_dpad_down">D-Pad: Down</string>
     <string name="controller_none_recent">No recent command</string>
+
+    <!-- New feature strings -->
+    <string name="search_games_placeholder">Search game or package…</string>
+    <string name="shizuku_off_warning">Shizuku off, activate it to use these features.</string>
+    <string name="boost_disable_4x_msaa_title">Disable 4x MSAA</string>
+    <string name="boost_disable_4x_msaa_desc">Disables forced 4x MSAA antialiasing to maximize FPS and reduce GPU load.</string>
+    <string name="boost_enable_all_btn">Enable All Boosts</string>
+    <string name="boost_enable_all_success">All boost settings activated successfully!</string>
+    <string name="res_default_device_title">Default Initial Phone Resolution:</string>
+    <string name="res_restore_default_btn">Restore Default Resolution</string>
+    <string name="res_only_game_title">Change resolution only for the game</string>
+    <string name="res_only_game_desc">Apply resolution only while this game is active</string>
+    <string name="logs_export_btn">Export Log (.txt)</string>
+    <string name="logs_export_success">Log exported successfully to Downloads/%s</string>
+    <string name="logs_export_error">Failed to export log: %s</string>
+    <string name="backup_export_saf_btn">Export to External Folder (SAF)</string>
+    <string name="backup_export_saf_success">Backup \"%s\" exported successfully!</string>
+    <string name="backup_date_time_label">Date/Time: %s</string>
+
+    <!-- Script Presets and Categories -->
+    <string name="category_performance">Performance</string>
+    <string name="category_graphics">Graphics &amp; FPS</string>
+    <string name="category_memory">Memory &amp; RAM</string>
+    <string name="category_system">System &amp; Kernel</string>
+    <string name="category_network">Network &amp; Ping</string>
+    <string name="category_custom">Custom</string>
+
+    <string name="preset_120hz_title">120Hz Refresh Rate &amp; Max FPS</string>
+    <string name="preset_120hz_desc">Locks screen at maximum 120Hz rate and disables system dynamic FPS limiters.</string>
+    <string name="preset_ram_clean_title">Aggressive RAM &amp; Cache Cleaning</string>
+    <string name="preset_ram_clean_desc">Syncs pending writes, frees page memory caches, and trims idle swap.</string>
+    <string name="preset_skia_vk_title">Force Skia Vulkan Renderer</string>
+    <string name="preset_skia_vk_desc">Changes HWUI graphics pipeline to Vulkan (SkiaVK) with lower draw call overhead.</string>
+    <string name="preset_reduce_logger_title">Reduce System Log Overhead</string>
+    <string name="preset_reduce_logger_desc">Reduces log buffer size to 64KB and disables heavy persistent logs.</string>
+    <string name="preset_disable_spooler_title">Disable Print Spooler</string>
+    <string name="preset_disable_spooler_desc">Disables background printing service searching for printers to save CPU and battery.</string>
+    <string name="preset_fixed_performance_title">Fixed Performance Mode (Android OS Core)</string>
+    <string name="preset_fixed_performance_desc">Enables Android native power service fixed performance mode flag on CPU/GPU.</string>
+    <string name="preset_network_tweaks_title">Optimize Network Latency (Game TCP)</string>
+    <string name="preset_network_tweaks_desc">Increases TCP network buffers for Wi-Fi and disables ECN for lower ping jitter.</string>
+    <string name="preset_webview_gpu_title">GPU Acceleration for Web / WebView Games</string>
+    <string name="preset_webview_gpu_desc">Forces GPU rasterization and disables software rasterizer for HTML5/Canvas/React games.</string>
+    <string name="preset_force_msaa_title">Force 4x MSAA &amp; GPU Composition</string>
+    <string name="preset_force_msaa_desc">Forces full 2D GPU acceleration and 4x antialiasing in OpenGL ES apps.</string>
 </resources>

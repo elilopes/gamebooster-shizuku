@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">해상도</string>
     <string name="compact_pak_bundle_btn">.pak 및 .bundle 압축</string>
     <string name="pak_bundle_compression_title">.pak 및 .bundle 압축</string>
-    <string name="pak_bundle_safe_notice">무결성 검증 시스템이 감지되지 않았습니다. 압축 안전.</string>
+    <string name="pak_bundle_safe_notice">무결성 검증 시스템이 없습니다. .pak 및 .bundle 파일을 안전하게 압축할 수 있습니다.</string>
+    <string name="game_action_force_doze">Doze 강제 실행</string>
+    <string name="force_doze_dialog_title">시스템 Doze 모드 강제</string>
+    <string name="force_doze_warning">시스템의 전체 Doze를 강제하면 TCP/UDP 소켓이 일시 중단되고 네트워크가 공격적인 절전 모드로 전환되어 패킷 손실, 높은 지터 및 온라인 게임 연결 끊김이 발생할 수 있습니다. 오프라인 게임에만 사용하는 것이 좋습니다.</string>
+    <string name="force_doze_enable_btn">Doze 켜기</string>
+    <string name="force_doze_disable_btn">Doze 끄기</string>
+    <string name="ad_action_block_dns">광고 차단 (AdGuard DNS)</string>
+    <string name="ad_action_block_net">게임 인터넷 차단</string>
+    <string name="ad_action_disable_components">광고 컴포넌트 비활성화</string>
     <string name="pak_bundle_blocked_notice">무결성 시스템 감지됨. 압축 차단됨.</string>
     <string name="gfx_tuner_title">GFX 튜너</string>
     <string name="gfx_tuner_warning">일부 최적화는 게임 개발자에 의해 부정행위로 간주될 수 있습니다.</string>

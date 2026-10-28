@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">Resolution</string>
     <string name="compact_pak_bundle_btn">Compress .pak &amp; .bundle</string>
     <string name="pak_bundle_compression_title">.pak &amp; .bundle Compression</string>
-    <string name="pak_bundle_safe_notice">No integrity verification system detected. Safe to compress .pak and .bundle assets without detection issues.</string>
+    <string name="pak_bundle_safe_notice">No integrity verification system. It may be possible to compress .pak and .bundle files safely.</string>
+    <string name="game_action_force_doze">Force Doze</string>
+    <string name="force_doze_dialog_title">Force System Doze Mode</string>
+    <string name="force_doze_warning">Forcing full system Doze suspends TCP/UDP sockets and puts network into aggressive power-saving, which can cause packet loss, high jitter, and disconnection in online games. Recommended only for offline games.</string>
+    <string name="force_doze_enable_btn">Enable Doze</string>
+    <string name="force_doze_disable_btn">Disable Doze</string>
+    <string name="ad_action_block_dns">Block Ads (AdGuard DNS)</string>
+    <string name="ad_action_block_net">Block Game Internet</string>
+    <string name="ad_action_disable_components">Disable Ad Components</string>
     <string name="pak_bundle_blocked_notice">Active integrity system detected. Compression is blocked to prevent data mismatch or bans.</string>
     <string name="gfx_tuner_title">GFX Tuner downgrade mode</string>
     <string name="gfx_tuner_warning">Some of these optimizations may be considered cheating by game developers, potentially leading to account bans.</string>

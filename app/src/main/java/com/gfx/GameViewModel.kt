@@ -114,6 +114,71 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         boostPrefs.edit().putBoolean("fpsAnalyticsEnabled", enabled).apply()
     }
 
+    // Suporte a detecção de chaves de hardware (oculta toggles inexistentes)
+    val isTouchSamplingSupported = boostSettings.isTouchSamplingSupported
+
+    // Network Latency & Jitter Monitor (TCP sem privilégios)
+    val networkMonitorEnabled = MutableStateFlow(boostPrefs.getBoolean("networkMonitorEnabled", false))
+    val networkLatencyState = NetworkLatencyMonitor.latencyState
+
+    fun toggleNetworkMonitor(enabled: Boolean) {
+        networkMonitorEnabled.value = enabled
+        boostPrefs.edit().putBoolean("networkMonitorEnabled", enabled).apply()
+        if (enabled) {
+            NetworkLatencyMonitor.startMonitoring()
+        } else {
+            NetworkLatencyMonitor.stopMonitoring()
+        }
+    }
+
+    // A/B Benchmark & Medição Real (dumpsys gfxinfo framestats)
+    val isBenchmarkRecording = BenchmarkManager.isRecording
+    val benchmarkRecordingPackage = BenchmarkManager.recordingPackage
+    val benchmarkRecordingProfile = BenchmarkManager.recordingProfile
+    val benchmarkHistory = MutableStateFlow<List<BenchmarkManager.ProfileBenchmarkResult>>(emptyList())
+
+    fun loadBenchmarks() {
+        benchmarkHistory.value = BenchmarkManager.loadBenchmarkHistory(app)
+    }
+
+    fun startBenchmark(packageName: String, profileLabel: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = BenchmarkManager.startBenchmark(packageName, profileLabel)
+            onResult(ok)
+        }
+    }
+
+    fun stopBenchmark(onResult: (BenchmarkManager.ProfileBenchmarkResult?) -> Unit) {
+        viewModelScope.launch {
+            val result = BenchmarkManager.stopBenchmark(app)
+            loadBenchmarks()
+            onResult(result)
+        }
+    }
+
+    fun compareBenchmarks(a: BenchmarkManager.ProfileBenchmarkResult, b: BenchmarkManager.ProfileBenchmarkResult): BenchmarkManager.ABComparison {
+        return BenchmarkManager.compareProfiles(a, b)
+    }
+
+    // Android 13+ Game Mode Overlay (Teto de FPS e Downscale)
+    fun applyGameModeOverlay(packageName: String, fpsLimit: Int, downscaleFactor: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val (ok, msg) = GameModeOverlayHelper.applyGameModeConfig(packageName, fpsLimit, downscaleFactor)
+            withContext(Dispatchers.Main) {
+                onResult(ok, msg)
+            }
+        }
+    }
+
+    fun resetGameModeOverlay(packageName: String, onResult: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val msg = GameModeOverlayHelper.resetGameModeConfig(packageName)
+            withContext(Dispatchers.Main) {
+                onResult(msg)
+            }
+        }
+    }
+
     // Image Optimizer State
     val inspectedImage = MutableStateFlow<ImageOptimizerHelper.ImageInfo?>(null)
     val compressedImageFile = MutableStateFlow<File?>(null)
@@ -177,9 +242,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Assegura que a resolução padrão inicial seja registrada na primeira inicialização
         val _initial = defaultInitialResolution
+
+        // Se o app foi finalizado ou o dispositivo reiniciou com o sistema alterado, restaura com segurança
+        if (SystemStateRecoveryHelper.isSystemAltered(app)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                SystemStateRecoveryHelper.restoreSystemState(app)
+            }
+        }
+
         loadGames()
         scanBackgroundApps()
         loadCustomScripts()
+        loadBenchmarks()
     }
 
     fun toggleThermalMonitor(enabled: Boolean) {
@@ -820,6 +894,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         boostSettings.enableAllBoosts(onComplete)
 
     fun launchGame(packageName: String) {
+        // Grava o estado do sistema antes das alterações para permitir recuperação pelo botão de pânico ou na próxima abertura
+        SystemStateRecoveryHelper.recordOriginalState(app, packageName)
+
         if (autoClearCache.value) {
             ShellFunctions.clearCache(packageName)
         }
@@ -848,8 +925,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             ShellFunctions.executePrivileged("setprop debug.game.performance_mode 1")
         }
 
+        // Não Perturbe e corte de pop-ups/overlays durante o jogo
         if (blockNotificationsGamer.value) {
             ShellFunctions.executePrivileged("settings put global heads_up_notifications_enabled 0")
+            ShellFunctions.executePrivileged("settings put global zen_mode 1")
+            ShellFunctions.executePrivileged("cmd notification set_interruption_filter 3")
         }
 
         if (reduceLoggerBuffer.value) {
@@ -885,8 +965,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             ShellFunctions.executePrivileged("am kill-all")
         }
 
+        // Revisão do deviceidle: NUNCA usar force-idle para não cortar a rede em jogos online
+        ShellFunctions.executePrivileged("cmd deviceidle unforce")
         if (forceDeepSleepCache.value) {
-            ShellFunctions.executePrivileged("cmd deviceidle force-idle")
             ShellFunctions.executePrivileged("cmd activity freeze")
         }
 
@@ -910,6 +991,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         if (intent != null) {
             GameForegroundService.activeGamePackage = packageName
+            GameForegroundService.startService(app)
             app.startActivity(intent)
             
             if (oomImmortal.value) {

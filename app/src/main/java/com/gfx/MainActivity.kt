@@ -114,9 +114,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Opcional: Atualiza o status do Shizuku toda vez que o usuário retorna ao app
         try {
             ShizukuHelper.updateStatus()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Restauração automática de wm size, densidade, animação e DNS ao voltar ao app
+        try {
+            if (SystemStateRecoveryHelper.isSystemAltered(this)) {
+                SystemStateRecoveryHelper.restoreSystemState(this)
+                Toast.makeText(this, "Configurações do sistema (resolução, animação e DNS) restauradas ao padrão!", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -362,6 +371,24 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                             viewModel.toggleFpsAnalytics(!fpsAnalyticsEnabled)
                             showMenu = false
                             selectedTabIndex = 0
+                        }
+                    )
+                    val networkEnabled by viewModel.networkMonitorEnabled.collectAsState()
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (networkEnabled) "Desativar Monitor de Rede (TCP)" else "Ativar Monitor de Rede (TCP)")
+                        },
+                        onClick = {
+                            viewModel.toggleNetworkMonitor(!networkEnabled)
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("🚨 Restaurar Sistema (Pânico)") },
+                        onClick = {
+                            val msg = SystemStateRecoveryHelper.restoreSystemState(context)
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            showMenu = false
                         }
                     )
                     DropdownMenuItem(
@@ -1280,6 +1307,8 @@ fun GameListTab(viewModel: GameViewModel) {
 
     var showActionsDialog by remember { mutableStateOf(false) }
     var actionsTargetGame by remember { mutableStateOf<GameApp?>(null) }
+    var showForceDozeDialog by remember { mutableStateOf(false) }
+    var forceDozeTargetGame by remember { mutableStateOf<GameApp?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1786,6 +1815,19 @@ fun GameListTab(viewModel: GameViewModel) {
 
                     OutlinedButton(
                         onClick = {
+                            showActionsDialog = false
+                            forceDozeTargetGame = targetGame
+                            showForceDozeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(id = R.string.game_action_force_doze))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
                             viewModel.exportGameConfig(targetGame.packageName) { success, msg ->
                                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                             }
@@ -1809,6 +1851,79 @@ fun GameListTab(viewModel: GameViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = { showActionsDialog = false }) {
+                    Text(stringResource(id = R.string.ok))
+                }
+            }
+        )
+    }
+
+    if (showForceDozeDialog && forceDozeTargetGame != null) {
+        val game = forceDozeTargetGame!!
+        AlertDialog(
+            onDismissRequest = { showForceDozeDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.force_doze_dialog_title))
+                }
+            },
+            text = {
+                Column {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.force_doze_warning),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Jogo selecionado: ${game.name}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val out = ShellFunctions.executePrivileged("cmd deviceidle force-idle")
+                                Toast.makeText(context, "Modo Doze completo ativado no sistema!", Toast.LENGTH_LONG).show()
+                                showForceDozeDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(id = R.string.force_doze_enable_btn))
+                        }
+                        Button(
+                            onClick = {
+                                val out = ShellFunctions.executePrivileged("cmd deviceidle unforce")
+                                ShellFunctions.executePrivileged("cmd deviceidle step")
+                                Toast.makeText(context, "Modo Doze desativado com sucesso!", Toast.LENGTH_SHORT).show()
+                                showForceDozeDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(id = R.string.force_doze_disable_btn))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showForceDozeDialog = false }) {
                     Text(stringResource(id = R.string.ok))
                 }
             }
@@ -2064,6 +2179,8 @@ fun GameListTab(viewModel: GameViewModel) {
         var onlyForGame by remember(selectedGame) {
             mutableStateOf(viewModel.isResolutionOnlyForGame(selectedGame!!.packageName))
         }
+        var selectedFpsLimit by remember(selectedGame) { mutableIntStateOf(0) }
+        var selectedDownscaleFactor by remember(selectedGame) { mutableStateOf("1.0") }
 
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -2172,6 +2289,7 @@ fun GameListTab(viewModel: GameViewModel) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
                             val recommended = viewModel.calculatePurrDpi(customResolutionInput.trim())
@@ -2181,6 +2299,56 @@ fun GameListTab(viewModel: GameViewModel) {
                     ) {
                         Text(stringResource(id = R.string.purr_auto_dpi_btn))
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Teto de FPS & Downscale (Android 13+ Game Mode Overlay)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "🎯 Teto de FPS & Downscale (Android 13+)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Fixar FPS em 30 ou 45 evita oscilações de frametime. O game_overlay aceita limite de FPS no Android 13+.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Teto de FPS:", style = MaterialTheme.typography.labelSmall)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(0 to "Ilimitado", 30 to "30 FPS", 45 to "45 FPS", 60 to "60 FPS", 90 to "90 FPS", 120 to "120 FPS").forEach { (fpsVal, label) ->
+                                    FilterChip(
+                                        selected = selectedFpsLimit == fpsVal,
+                                        onClick = { selectedFpsLimit = fpsVal },
+                                        label = { Text(label, fontSize = 10.sp) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Downscale Factor:", style = MaterialTheme.typography.labelSmall)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf("1.0", "0.9", "0.8", "0.7", "0.6", "0.5").forEach { factor ->
+                                    FilterChip(
+                                        selected = selectedDownscaleFactor == factor,
+                                        onClick = { selectedDownscaleFactor = factor },
+                                        label = { Text("${factor}x", fontSize = 10.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2208,6 +2376,11 @@ fun GameListTab(viewModel: GameViewModel) {
                     viewModel.setResolutionOnlyForGame(selectedGame!!.packageName, onlyForGame)
                     if (parts.size == 2) {
                         viewModel.saveProfile(selectedGame!!.packageName, customResolutionInput.trim(), dpi)
+                    }
+                    if (selectedFpsLimit > 0 || selectedDownscaleFactor != "1.0") {
+                        viewModel.applyGameModeOverlay(selectedGame!!.packageName, selectedFpsLimit, selectedDownscaleFactor) { _, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
                     }
                     showDialog = false
                 }) {
@@ -2507,14 +2680,21 @@ fun GameListTab(viewModel: GameViewModel) {
         val result = adScanResult!!
         AlertDialog(
             onDismissRequest = { adScanResult = null },
-            title = { Text(stringResource(id = R.string.ad_scan_title)) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Security, contentDescription = null, tint = if (result.hasAds) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.ad_scan_title))
+                }
+            },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     if (result.hasAds) {
                         Text(
                             text = stringResource(id = R.string.ad_scan_detected),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         result.detectedNetworks.forEach { network ->
@@ -2522,6 +2702,69 @@ fun GameListTab(viewModel: GameViewModel) {
                                 text = "• $network",
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "Opções para Bloquear Anúncios:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Ação 1: Bloquear via DNS AdGuard
+                        Button(
+                            onClick = {
+                                val success = AdBlockHelper.enableAdBlocking()
+                                if (success) {
+                                    Toast.makeText(context, "Bloqueador de Anúncios ativado globalmente via DNS AdGuard!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Falha ao definir DNS via Shizuku.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(id = R.string.ad_action_block_dns), style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Ação 2: Bloquear Internet deste Jogo (Modo Offline)
+                        OutlinedButton(
+                            onClick = {
+                                val ok = AdBlockHelper.toggleGameInternet(context.packageManager, result.packageName, true)
+                                if (ok) {
+                                    Toast.makeText(context, "Acesso à internet bloqueado para este jogo. Banners de anúncios não carregarão!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Falha ao aplicar regra de rede no Shizuku.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.WifiOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(id = R.string.ad_action_block_net), style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Ação 3: Desativar Componentes de Anúncios
+                        OutlinedButton(
+                            onClick = {
+                                val count = AdBlockHelper.disableAdComponents(context.packageManager, result.packageName)
+                                Toast.makeText(context, "$count componente(s) de publicidade desativados com sucesso no pacote!", Toast.LENGTH_LONG).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(id = R.string.ad_action_disable_components), style = MaterialTheme.typography.labelMedium)
                         }
                     } else {
                         Text(
@@ -3291,14 +3534,17 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
             descRes = R.string.boost_animations_desc,
             onInfoClick = { showInfoDialog = it }
         )
-        SettingItem(
-            title = stringResource(id = R.string.boost_touch_sampling_title),
-            checked = highTouchSampling,
-            onCheckedChange = { viewModel.toggleHighTouchSampling(it) },
-            titleRes = R.string.boost_touch_sampling_title,
-            descRes = R.string.boost_touch_sampling_desc,
-            onInfoClick = { showInfoDialog = it }
-        )
+        val isTouchSamplingSupported by viewModel.isTouchSamplingSupported.collectAsState()
+        if (isTouchSamplingSupported) {
+            SettingItem(
+                title = stringResource(id = R.string.boost_touch_sampling_title),
+                checked = highTouchSampling,
+                onCheckedChange = { viewModel.toggleHighTouchSampling(it) },
+                titleRes = R.string.boost_touch_sampling_title,
+                descRes = R.string.boost_touch_sampling_desc,
+                onInfoClick = { showInfoDialog = it }
+            )
+        }
         SettingItem(
             title = stringResource(id = R.string.boost_limit_bg_title),
             checked = limitBackgroundProcesses,

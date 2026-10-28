@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">Resolução</string>
     <string name="compact_pak_bundle_btn">Compactar .pak e .bundle</string>
     <string name="pak_bundle_compression_title">Compressão de .pak e .bundle</string>
-    <string name="pak_bundle_safe_notice">Nenhum sistema de verificação de integridade detectado. Seguro compactar arquivos .pak e .bundle sem riscos de detecção.</string>
+    <string name="pak_bundle_safe_notice">Sem sistema de verificação de integridade. Talvez seja possível compactar os arquivos .pak e .bundle sem riscos.</string>
+    <string name="game_action_force_doze">Forçar o Doze</string>
+    <string name="force_doze_dialog_title">Forçar Modo Doze do Sistema</string>
+    <string name="force_doze_warning">Forçar o Doze completo do sistema suspende sockets TCP/UDP e coloca a rede em economia agressiva, o que pode causar perda de pacotes, jitter alto e, desconexão do jogo online. Recomendável usar apenas em jogo offline.</string>
+    <string name="force_doze_enable_btn">Ativar Doze</string>
+    <string name="force_doze_disable_btn">Desativar Doze</string>
+    <string name="ad_action_block_dns">Bloquear Anúncios (DNS AdGuard)</string>
+    <string name="ad_action_block_net">Bloquear Internet do Jogo</string>
+    <string name="ad_action_disable_components">Desativar Componentes de Ads</string>
     <string name="pak_bundle_blocked_notice">Sistema de integridade ativo detectado. A compressão foi bloqueada para evitar conflitos ou banimentos.</string>
     <string name="gfx_tuner_title">GFX Tuner downgrade mode</string>
     <string name="gfx_tuner_warning">Algumas dessas otimizações podem ser interpretadas como trapaça pelos desenvolvedores do jogo, podendo levar ao banimento da conta.</string>

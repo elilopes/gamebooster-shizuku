@@ -246,7 +246,19 @@ class AppsBackground(
             }
         }
 
-        list.distinctBy { it.packageName }
+        // Ordenar a lista final:
+        // 1. Aplicativos congelados (isFrozen == true) aparecem no topo.
+        // 2. Apps ativos são ordenados do maior para o menor consumo de memória RAM.
+        val sortedList = list.distinctBy { it.packageName }.sortedWith(
+            compareByDescending<BackgroundApp> { it.isFrozen }.thenByDescending { app ->
+                if (app.isFrozen) 0
+                else {
+                    app.memUsage.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                }
+            }
+        )
+
+        sortedList
     }
 
     /**

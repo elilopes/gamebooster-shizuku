@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">Разрешение</string>
     <string name="compact_pak_bundle_btn">Сжать .pak и .bundle</string>
     <string name="pak_bundle_compression_title">Сжатие .pak и .bundle</string>
-    <string name="pak_bundle_safe_notice">Система проверки целостности не обнаружена. Безопасно сжимать активы .pak и .bundle.</string>
+    <string name="pak_bundle_safe_notice">Система проверки целостности не обнаружена. Возможно, безопасно сжать файлы .pak и .bundle.</string>
+    <string name="game_action_force_doze">Принудительный Doze</string>
+    <string name="force_doze_dialog_title">Принудительный режим Doze</string>
+    <string name="force_doze_warning">Принудительный полный Doze приостанавливает сокеты TCP/UDP и переводит сеть в агрессивное энергосбережение, что может вызвать потерю пакетов, высокий джиттер и отключение от онлайн-игр. Рекомендуется только для офлайн-игр.</string>
+    <string name="force_doze_enable_btn">Включить Doze</string>
+    <string name="force_doze_disable_btn">Отключить Doze</string>
+    <string name="ad_action_block_dns">Блокировать рекламу (AdGuard DNS)</string>
+    <string name="ad_action_block_net">Заблокировать интернет игре</string>
+    <string name="ad_action_disable_components">Отключить модули рекламы</string>
     <string name="pak_bundle_blocked_notice">Обнаружена активная система целостности. Сжатие заблокировано.</string>
     <string name="gfx_tuner_title">Режим снижения GFX Tuner</string>
     <string name="gfx_tuner_warning">Некоторые оптимизации могут расцениваться разработчиками как читерство.</string>

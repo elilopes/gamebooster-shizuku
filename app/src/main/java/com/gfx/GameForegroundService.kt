@@ -43,6 +43,7 @@ class GameForegroundService : Service() {
         const val ACTION_STOP_THERMAL = "com.gfx.ACTION_STOP_THERMAL"
         const val ACTION_STOP_ADBLOCK = "com.gfx.ACTION_STOP_ADBLOCK"
         const val ACTION_KILL_GAME = "com.gfx.ACTION_KILL_GAME"
+        const val ACTION_PANIC_RESTORE = "com.gfx.ACTION_PANIC_RESTORE"
 
         /**
          * [PT] Pacote do jogo ativo atualmente em execução.
@@ -134,6 +135,17 @@ class GameForegroundService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
+                ACTION_PANIC_RESTORE -> {
+                    SystemStateRecoveryHelper.restoreSystemState(this)
+                    activeGamePackage = null
+                    keepAliveActive = false
+                    thermalMonitoringActive = false
+                    adBlockerRealtimeActive = false
+                    isRunning = false
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 ACTION_KILL_GAME -> {
                     val pkg = activeGamePackage
                     if (!pkg.isNullOrBlank()) {
@@ -145,6 +157,7 @@ class GameForegroundService : Service() {
                             e.printStackTrace()
                         }
                     }
+                    SystemStateRecoveryHelper.restoreSystemState(this)
                     activeGamePackage = null
                     keepAliveActive = false
                     thermalMonitoringActive = false
@@ -279,12 +292,21 @@ class GameForegroundService : Service() {
             }
         }
 
+        val panicIntent = Intent(this, GameForegroundService::class.java).apply {
+            action = ACTION_PANIC_RESTORE
+        }
+        val panicPendingIntent = PendingIntent.getService(
+            this, 2, panicIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("GFX Game Booster Ativo")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setContentIntent(contentPendingIntent)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_dialog_alert, "🚨 Restaurar (Pânico)", panicPendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.notification_action_kill_game), PendingIntent.getService(
                 this, 1, Intent(this, GameForegroundService::class.java).apply { action = ACTION_KILL_GAME },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

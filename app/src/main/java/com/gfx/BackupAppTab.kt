@@ -1,12 +1,17 @@
 package com.gfx
 
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.*
@@ -34,41 +39,75 @@ fun BackupAppTab(viewModel: GameViewModel) {
     var backups by remember { mutableStateOf<List<File>>(emptyList()) }
     var refreshing by remember { mutableStateOf(false) }
 
-    var pendingExportFile by remember { mutableStateOf<File?>(null) }
-    val safExportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
-    ) { treeUri ->
-        if (treeUri != null && pendingExportFile != null) {
-            val target = pendingExportFile!!
+    var showInstallerDialog by remember { mutableStateOf(false) }
+    var selectedInstallerUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedInstallerFile by remember { mutableStateOf<File?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedInstallerUri = uri
+            selectedInstallerFile = null
+            showInstallerDialog = true
+        }
+    }
+
+    var pendingExportBackupFile by remember { mutableStateOf<File?>(null) }
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { destUri ->
+        if (destUri != null && pendingExportBackupFile != null) {
+            val target = pendingExportBackupFile!!
             scope.launch(Dispatchers.IO) {
                 try {
-                    val docUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(
-                        treeUri,
-                        android.provider.DocumentsContract.getTreeDocumentId(treeUri)
-                    )
-                    val mime = if (target.name.endsWith(".zip", ignoreCase = true)) "application/zip" else "application/octet-stream"
-                    val createdDocUri = android.provider.DocumentsContract.createDocument(
-                        context.contentResolver,
-                        docUri,
-                        mime,
-                        target.name
-                    )
-                    if (createdDocUri != null) {
-                        context.contentResolver.openOutputStream(createdDocUri)?.use { outStream ->
-                            target.inputStream().use { inStream ->
-                                inStream.copyTo(outStream)
-                            }
-                        }
-                        withContext(Dispatchers.Main) {
+                    val success = context.contentResolver.openOutputStream(destUri)?.use { out ->
+                        backupManager.exportBackupToStream(target, out)
+                    } ?: false
+
+                    withContext(Dispatchers.Main) {
+                        if (success) {
                             Toast.makeText(context, context.getString(R.string.backup_export_saf_success, target.name), Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Falha ao gravar arquivo de backup no destino SAF.", Toast.LENGTH_LONG).show()
                         }
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Erro ao exportar backup via SAF: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Erro na exportação SAF: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 } finally {
-                    pendingExportFile = null
+                    pendingExportBackupFile = null
+                }
+            }
+        }
+    }
+
+    var pendingExportApkFile by remember { mutableStateOf<File?>(null) }
+    val exportApkLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.android.package-archive")
+    ) { destUri ->
+        if (destUri != null && pendingExportApkFile != null) {
+            val target = pendingExportApkFile!!
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val success = context.contentResolver.openOutputStream(destUri)?.use { out ->
+                        backupManager.exportApkToStream(target, out)
+                    } ?: false
+
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            Toast.makeText(context, "APK exportado com sucesso para a pasta externa via SAF!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Nenhum arquivo APK pôde ser extraído para o destino selecionado.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Erro ao exportar APK via SAF: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                } finally {
+                    pendingExportApkFile = null
                 }
             }
         }
@@ -115,7 +154,42 @@ fun BackupAppTab(viewModel: GameViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Card do Instalador Detalhado de APKs
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "Instalador de APKs e Pacotes Detalhado",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Suporte a .apk, .apks, .xapk, .apkm e backups .zip. Extração monitorada, ficha técnica, verificação anti-tamper, alerta UPDATE_INCOMPATIBLE e logcat ao vivo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        filePickerLauncher.launch(arrayOf("*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("select_apk_file_btn")
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Selecionar Arquivo para Instalação")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         if (backups.isEmpty()) {
             Box(
@@ -148,14 +222,56 @@ fun BackupAppTab(viewModel: GameViewModel) {
                             Toast.makeText(context, "Backup excluído com sucesso", Toast.LENGTH_SHORT).show()
                             loadBackups()
                         },
-                        onExportSaf = { toExport ->
-                            pendingExportFile = toExport
-                            safExportLauncher.launch(null)
+                        onExportBackupSaf = { toExport ->
+                            pendingExportBackupFile = toExport
+                            exportBackupLauncher.launch(toExport.name)
+                        },
+                        onExportApkSaf = { toExport ->
+                            pendingExportApkFile = toExport
+                            val suggestedApkName = if (packageName.isNotBlank()) "${packageName}.apk" else "app.apk"
+                            exportApkLauncher.launch(suggestedApkName)
+                        },
+                        onReinstallApk = { toReinstall ->
+                            backupManager.reinstallApkFromBackup(toReinstall, packageName) { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                loadBackups()
+                            }
+                        },
+                        onDetailedInstall = { targetFile ->
+                            selectedInstallerFile = targetFile
+                            selectedInstallerUri = null
+                            showInstallerDialog = true
                         }
                     )
                 }
             }
         }
+    }
+
+    if (showInstallerDialog && (selectedInstallerUri != null || selectedInstallerFile != null)) {
+        DetailedApkInstallerDialog(
+            sourceUri = selectedInstallerUri,
+            sourceFile = selectedInstallerFile,
+            onDismiss = {
+                showInstallerDialog = false
+                selectedInstallerUri = null
+                selectedInstallerFile = null
+                loadBackups()
+            },
+            onBackupRequested = { pkg ->
+                Toast.makeText(context, "Iniciando backup prévio do app $pkg...", Toast.LENGTH_SHORT).show()
+                backupManager.backupApp(
+                    packageName = pkg,
+                    includeApk = true,
+                    includeObb = true,
+                    includeData = true,
+                    compressZip = true
+                ) { success, msg ->
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    loadBackups()
+                }
+            }
+        )
     }
 }
 
@@ -166,7 +282,10 @@ fun BackupItemCard(
     backupManager: BackupApp,
     onRestored: (Boolean, String) -> Unit,
     onDeleted: () -> Unit,
-    onExportSaf: (File) -> Unit
+    onExportBackupSaf: (File) -> Unit,
+    onExportApkSaf: (File) -> Unit,
+    onReinstallApk: (File) -> Unit,
+    onDetailedInstall: (File) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val formattedDate = remember(file) {
@@ -224,20 +343,55 @@ fun BackupItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedButton(
-                onClick = { onExportSaf(file) },
-                modifier = Modifier.fillMaxWidth().testTag("export_saf_${file.name}")
+            // Botão Reinstalar APK e Botão de Instalação Detalhada
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(id = R.string.backup_export_saf_btn),
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Button(
+                    onClick = { onReinstallApk(file) },
+                    modifier = Modifier.weight(1f).testTag("reinstall_apk_${file.name}"),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reinstalar APK", style = MaterialTheme.typography.labelMedium)
+                }
+
+                FilledTonalButton(
+                    onClick = { onDetailedInstall(file) },
+                    modifier = Modifier.weight(1.2f).testTag("detailed_install_${file.name}")
+                ) {
+                    Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Instalar Detalhado", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Botões de Exportação SAF (Exportar APK e Exportar Backup)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onExportApkSaf(file) },
+                    modifier = Modifier.weight(1f).testTag("export_apk_saf_${file.name}")
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Exportar APK (SAF)", style = MaterialTheme.typography.labelSmall)
+                }
+
+                OutlinedButton(
+                    onClick = { onExportBackupSaf(file) },
+                    modifier = Modifier.weight(1f).testTag("export_backup_saf_${file.name}")
+                ) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Exportar Backup (SAF)", style = MaterialTheme.typography.labelSmall)
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

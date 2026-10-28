@@ -402,4 +402,149 @@ class BackupApp(
             }
         }
     }
+
+    /**
+     * Extrai e copia o APK principal de um backup diretamente para o OutputStream do SAF
+     */
+    fun exportApkToStream(backupFile: File, outputStream: java.io.OutputStream): Boolean {
+        return try {
+            if (backupFile.name.endsWith(".apk", ignoreCase = true)) {
+                backupFile.inputStream().use { it.copyTo(outputStream) }
+                true
+            } else if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                java.util.zip.ZipFile(backupFile).use { zip ->
+                    val apkEntry = zip.entries().asSequence().firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+                    if (apkEntry != null) {
+                        zip.getInputStream(apkEntry).use { it.copyTo(outputStream) }
+                        true
+                    } else {
+                        false
+                    }
+                }
+            } else if (backupFile.isDirectory) {
+                val apk = backupFile.walkTopDown().firstOrNull { it.isFile && it.name.endsWith(".apk", ignoreCase = true) }
+                if (apk != null) {
+                    apk.inputStream().use { it.copyTo(outputStream) }
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Copia o arquivo completo de backup para o OutputStream do SAF
+     */
+    fun exportBackupToStream(backupFile: File, outputStream: java.io.OutputStream): Boolean {
+        return try {
+            if (backupFile.isFile) {
+                backupFile.inputStream().use { it.copyTo(outputStream) }
+                true
+            } else if (backupFile.isDirectory) {
+                java.util.zip.ZipOutputStream(outputStream).use { zos ->
+                    backupFile.walkTopDown().forEach { file ->
+                        if (file.isFile) {
+                            val rel = file.relativeTo(backupFile).path.replace('\\', '/')
+                            zos.putNextEntry(java.util.zip.ZipEntry(rel))
+                            file.inputStream().use { it.copyTo(zos) }
+                            zos.closeEntry()
+                        }
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Reinstala apenas o APK contido no backup com substituição forçada (-r)
+     */
+    fun reinstallApkFromBackup(backupFile: File, packageName: String, onResult: (Boolean, String) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val tempExtract = File(context.cacheDir, "reinstall_${System.currentTimeMillis()}")
+                tempExtract.mkdirs()
+
+                if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                    java.util.zip.ZipFile(backupFile).use { zip ->
+                        for (entry in zip.entries().asSequence()) {
+                            if (entry.name.endsWith(".apk", ignoreCase = true)) {
+                                val outFile = File(tempExtract, File(entry.name).name)
+                                zip.getInputStream(entry).use { inS ->
+                                    outFile.outputStream().use { outS -> inS.copyTo(outS) }
+                                }
+                            }
+                        }
+                    }
+                } else if (backupFile.name.endsWith(".apk", ignoreCase = true)) {
+                    backupFile.copyTo(File(tempExtract, backupFile.name), overwrite = true)
+                } else if (backupFile.isDirectory) {
+                    backupFile.walkTopDown().filter { it.isFile && it.name.endsWith(".apk", ignoreCase = true) }.forEach {
+                        it.copyTo(File(tempExtract, it.name), overwrite = true)
+                    }
+                }
+
+                val apks = tempExtract.listFiles { f -> f.name.endsWith(".apk", ignoreCase = true) } ?: emptyArray()
+                if (apks.isEmpty()) {
+                    tempExtract.deleteRecursively()
+                    withContext(Dispatchers.Main) {
+                        onResult(false, "Nenhum arquivo APK encontrado dentro deste backup.")
+                    }
+                    return@launch
+                }
+
+                val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
+                if (hasPriv) {
+                    val cmd = if (apks.size == 1) {
+                        "pm install -r \"${apks[0].absolutePath}\""
+                    } else {
+                        val paths = apks.joinToString(" ") { "\"${it.absolutePath}\"" }
+                        "pm install-multiple -r $paths"
+                    }
+                    val output = ShellFunctions.executePrivileged(cmd).trim()
+                    tempExtract.deleteRecursively()
+
+                    withContext(Dispatchers.Main) {
+                        if (output.contains("Success", ignoreCase = true)) {
+                            onResult(true, "APK reinstalado com sucesso pelo PackageManager!")
+                        } else {
+                            onResult(false, "Falha na reinstalação: $output")
+                        }
+                    }
+                } else {
+                    // Sem privilégios, abre intent de instalação padrão com o primeiro APK
+                    val baseApk = apks[0]
+                    val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        baseApk
+                    )
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(apkUri, "application/vnd.android.package-archive")
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    withContext(Dispatchers.Main) {
+                        onResult(true, "Instalador do sistema aberto para reinstalação do APK.")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult(false, "Erro ao reinstalar APK do backup: ${e.message}")
+                }
+            }
+        }
+    }
 }

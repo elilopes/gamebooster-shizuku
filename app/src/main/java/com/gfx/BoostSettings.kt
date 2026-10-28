@@ -101,8 +101,44 @@ class BoostSettings(
     /** [PT-BR] Estado de desativação de 4x MSAA forçado. [EN] Disable forced 4x MSAA state. */
     val disable4xMsaa = MutableStateFlow(false)
 
+    /** [PT-BR] Indica se as chaves de fabricante para taxa de amostragem de toque existem no dispositivo. */
+    val isTouchSamplingSupported = MutableStateFlow(false)
+
     init {
         loadBoostSettings()
+        scope.launch(Dispatchers.IO) {
+            detectHardwareKeySupport()
+        }
+    }
+
+    /**
+     * [PT-BR] Detecta se as chaves proprietárias de fabricantes existem no sistema antes de exibir toggles sem efeito.
+     */
+    suspend fun detectHardwareKeySupport() {
+        val check1 = ShellFunctions.executePrivileged("settings get system touch_response_rate").trim()
+        val check2 = ShellFunctions.executePrivileged("settings get system gaming_touch_mode").trim()
+        val check3 = ShellFunctions.executePrivileged("settings get global game_touch_enhancement").trim()
+        val check4 = ShellFunctions.executePrivileged("settings get system touch_sensitivity").trim()
+        val supported = listOf(check1, check2, check3, check4).any {
+            it.isNotEmpty() && it != "null" && !it.startsWith("Error")
+        }
+        withContext(Dispatchers.Main) {
+            isTouchSamplingSupported.value = supported
+        }
+    }
+
+    /**
+     * [PT-BR] Executa 'settings put' e verifica imediatamente com 'settings get' para validar se a alteração teve efeito real.
+     */
+    suspend fun putAndVerifySetting(namespace: String, key: String, targetValue: String): Pair<Boolean, String> {
+        ShellFunctions.executePrivileged("settings put $namespace $key $targetValue")
+        val readBack = ShellFunctions.executePrivileged("settings get $namespace $key").trim()
+        return if (readBack == targetValue) {
+            Pair(true, "Aplicado e verificado ($key = $readBack)")
+        } else {
+            val reason = if (readBack.isEmpty() || readBack == "null") "Chave não suportada pelo sistema nesta ROM" else "Lido de volta: $readBack"
+            Pair(false, "Sem efeito no dispositivo ($reason)")
+        }
     }
 
     /**
@@ -302,21 +338,22 @@ class BoostSettings(
         scope.launch(Dispatchers.IO) {
             try {
                 val scale = if (enable) "0.0" else "1.0"
-                val r1 = ShellFunctions.executePrivileged("settings put global window_animation_scale $scale")
-                val r2 = ShellFunctions.executePrivileged("settings put global transition_animation_scale $scale")
-                val r3 = ShellFunctions.executePrivileged("settings put global animator_duration_scale $scale")
+                if (enable) {
+                    SystemStateRecoveryHelper.recordOriginalState(context)
+                }
+                ShellFunctions.executePrivileged("settings put global window_animation_scale $scale")
+                ShellFunctions.executePrivileged("settings put global transition_animation_scale $scale")
+                ShellFunctions.executePrivileged("settings put global animator_duration_scale $scale")
 
-                val hasError = r1.startsWith("Error") || r2.startsWith("Error") || r3.startsWith("Error")
+                // Verificação de leitura (Aplicar e verificar)
+                val readScale = ShellFunctions.executePrivileged("settings get global window_animation_scale").trim()
+                val isApplied = readScale == scale
 
                 withContext(Dispatchers.Main) {
-                    if (hasError) {
-                        disableAnimations.value = false
-                        boostPrefs.edit().putBoolean("disableAnimations", false).apply()
-                        val msg = "Erro ao configurar animações via Shizuku/Root."
-                        dispatchAlert(msg)
-                        onResult?.invoke(false, msg)
+                    if (isApplied) {
+                        onResult?.invoke(true, if (enable) "Animações desativadas e verificadas (0.0x)!" else "Animações restauradas (1.0x).")
                     } else {
-                        onResult?.invoke(true, if (enable) "Animações desativadas!" else "Animações restauradas.")
+                        onResult?.invoke(false, "Sem efeito no dispositivo (lido de volta: $readScale).")
                     }
                 }
             } catch (e: Exception) {
@@ -351,22 +388,20 @@ class BoostSettings(
         scope.launch(Dispatchers.IO) {
             try {
                 val v = if (enable) "1" else "0"
-                val r1 = ShellFunctions.executePrivileged("settings put system touch_response_rate $v")
-                val r2 = ShellFunctions.executePrivileged("settings put system gaming_touch_mode $v")
-                val r3 = ShellFunctions.executePrivileged("settings put system touch_sensitivity $v")
-                val r4 = ShellFunctions.executePrivileged("settings put global game_touch_enhancement $v")
+                val (ok1, _) = putAndVerifySetting("system", "touch_response_rate", v)
+                val (ok2, _) = putAndVerifySetting("system", "gaming_touch_mode", v)
+                val (ok3, _) = putAndVerifySetting("system", "touch_sensitivity", v)
+                val (ok4, _) = putAndVerifySetting("global", "game_touch_enhancement", v)
 
-                val hasError = r1.startsWith("Error") || r2.startsWith("Error") || r3.startsWith("Error") || r4.startsWith("Error")
+                val anyApplied = ok1 || ok2 || ok3 || ok4
 
                 withContext(Dispatchers.Main) {
-                    if (hasError) {
+                    if (anyApplied) {
+                        onResult?.invoke(true, if (enable) "Taxa de toque aprimorada e verificada no hardware!" else "Taxa de toque restaurada.")
+                    } else {
                         highTouchSampling.value = false
                         boostPrefs.edit().putBoolean("highTouchSampling", false).apply()
-                        val msg = "Erro ao configurar taxa de amostragem de toque via Shizuku/Root."
-                        dispatchAlert(msg)
-                        onResult?.invoke(false, msg)
-                    } else {
-                        onResult?.invoke(true, if (enable) "Taxa de amostragem de toque aprimorada!" else "Taxa de toque restaurada.")
+                        onResult?.invoke(false, "Sem efeito: o hardware/ROM deste aparelho não possui chaves proprietárias de taxa de toque.")
                     }
                 }
             } catch (e: Exception) {
@@ -536,10 +571,12 @@ class BoostSettings(
 
         scope.launch(Dispatchers.IO) {
             try {
-                val r1 = ShellFunctions.executePrivileged("cmd deviceidle force-idle")
+                // Importante: NÃO executar 'cmd deviceidle force-idle', pois força o modo Doze e restringe rede e sockets de jogos online.
+                // Garantimos que o Doze esteja desimpedido (unforce) e congelamos apenas apps secundários em cache.
+                val r1 = ShellFunctions.executePrivileged("cmd deviceidle unforce")
                 val r2 = ShellFunctions.executePrivileged("cmd activity freeze")
 
-                var hasError = r1.startsWith("Error") || r2.startsWith("Error")
+                var hasError = r2.startsWith("Error")
 
                 getBackgroundApps().forEach { app ->
                     val sa1 = ShellFunctions.executePrivileged("am set-standby-bucket ${app.packageName} restricted")
@@ -551,11 +588,11 @@ class BoostSettings(
 
                 withContext(Dispatchers.Main) {
                     if (hasError) {
-                        val msg = "Alguns comandos de Deep Sleep falharam. Verifique o Shizuku/Root."
+                        val msg = "Alguns comandos de suspensão falharam. Verifique o Shizuku/Root."
                         dispatchAlert(msg)
                         onResult(false, msg)
                     } else {
-                        onResult(true, "Deep sleep aplicado aos apps em cache com sucesso.")
+                        onResult(true, "Deep sleep aplicado aos apps secundários (Rede para jogos online mantida desimpedida).")
                     }
                 }
             } catch (e: Exception) {
@@ -588,17 +625,36 @@ class BoostSettings(
         scope.launch(Dispatchers.IO) {
             try {
                 val gov = if (enable) "performance" else "schedutil"
-                val result = ShellFunctions.executePrivileged("echo $gov > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
+                val path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+                val checkFile = ShellFunctions.executePrivileged("ls $path").trim()
 
-                withContext(Dispatchers.Main) {
-                    if (result.startsWith("Error")) {
+                if (checkFile.contains("No such file", ignoreCase = true) || checkFile.startsWith("Error")) {
+                    withContext(Dispatchers.Main) {
                         forceMaxCpu.value = false
                         boostPrefs.edit().putBoolean("forceMaxCpu", false).apply()
-                        val msg = "Erro ao alterar frequência da CPU: $result"
+                        val msg = "Arquivo de governor não encontrado no kernel deste aparelho: $path"
                         dispatchAlert(msg)
                         onResult?.invoke(false, msg)
+                    }
+                    return@launch
+                }
+
+                val writeResult = ShellFunctions.executePrivileged("echo $gov > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
+                val currentGov = ShellFunctions.executePrivileged("cat $path").trim()
+
+                withContext(Dispatchers.Main) {
+                    if (currentGov.equals(gov, ignoreCase = true)) {
+                        onResult?.invoke(true, "CPU Governor aplicado e verificado: $currentGov")
                     } else {
-                        onResult?.invoke(true, if (enable) "CPU configurada para Performance!" else "CPU restaurada.")
+                        forceMaxCpu.value = false
+                        boostPrefs.edit().putBoolean("forceMaxCpu", false).apply()
+                        val err = if (writeResult.contains("Permission denied", ignoreCase = true) || writeResult.startsWith("Error")) {
+                            "Acesso negado pelo kernel/SELinux. O Shizuku não possui permissão de root para alterar o scaling_governor (permanece: $currentGov)."
+                        } else {
+                            "Sem efeito: o kernel recusou a alteração do governor (permanece: $currentGov)."
+                        }
+                        dispatchAlert(err)
+                        onResult?.invoke(false, err)
                     }
                 }
             } catch (e: Exception) {
@@ -633,17 +689,36 @@ class BoostSettings(
         scope.launch(Dispatchers.IO) {
             try {
                 val gov = if (enable) "performance" else "msm-adreno-tz"
-                val result = ShellFunctions.executePrivileged("echo $gov > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
+                val path = "/sys/class/kgsl/kgsl-3d0/devfreq/governor"
+                val checkFile = ShellFunctions.executePrivileged("ls $path").trim()
 
-                withContext(Dispatchers.Main) {
-                    if (result.startsWith("Error")) {
+                if (checkFile.contains("No such file", ignoreCase = true) || checkFile.startsWith("Error")) {
+                    withContext(Dispatchers.Main) {
                         forceMaxGpu.value = false
                         boostPrefs.edit().putBoolean("forceMaxGpu", false).apply()
-                        val msg = "Erro ao alterar frequência da GPU: $result"
+                        val msg = "Driver Adreno KGSL não encontrado (aparelho com GPU Mali/PowerVR ou driver bloqueado)."
                         dispatchAlert(msg)
                         onResult?.invoke(false, msg)
+                    }
+                    return@launch
+                }
+
+                val writeResult = ShellFunctions.executePrivileged("echo $gov > $path")
+                val currentGov = ShellFunctions.executePrivileged("cat $path").trim()
+
+                withContext(Dispatchers.Main) {
+                    if (currentGov.equals(gov, ignoreCase = true)) {
+                        onResult?.invoke(true, "GPU Governor aplicado e verificado: $currentGov")
                     } else {
-                        onResult?.invoke(true, if (enable) "GPU configurada para Performance!" else "GPU restaurada.")
+                        forceMaxGpu.value = false
+                        boostPrefs.edit().putBoolean("forceMaxGpu", false).apply()
+                        val err = if (writeResult.contains("Permission denied", ignoreCase = true) || writeResult.startsWith("Error")) {
+                            "Acesso negado pelo kernel. O Shizuku não possui permissão de root para alterar o governor da GPU (permanece: $currentGov)."
+                        } else {
+                            "Sem efeito: kernel recusou alterar o governor da GPU (permanece: $currentGov)."
+                        }
+                        dispatchAlert(err)
+                        onResult?.invoke(false, err)
                     }
                 }
             } catch (e: Exception) {

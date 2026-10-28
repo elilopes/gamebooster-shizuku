@@ -1,12 +1,16 @@
 package com.gfx
 
 import android.content.Context
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,37 +26,43 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
-data class FpsSessionRecord(
-    val id: String,
-    val gameName: String,
-    val averageFps: Int,
-    val peakFps: Int,
-    val lowestFps: Int,
-    val timestamp: String,
-    val engine: String
-)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FpsMetricsTab(viewModel: GameViewModel) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
 
-    val sessions = remember {
-        listOf(
-            FpsSessionRecord("1", "PUBG Mobile", 59, 60, 48, "Hoje, 15:30", "Unreal Engine"),
-            FpsSessionRecord("2", "Genshin Impact", 52, 60, 35, "Hoje, 14:10", "Unity"),
-            FpsSessionRecord("3", "Free Fire", 88, 90, 75, "Ontem, 20:45", "Unity"),
-            FpsSessionRecord("4", "Call of Duty: Mobile", 116, 120, 95, "Ontem, 18:20", "Android Studio"),
-            FpsSessionRecord("5", "Minecraft", 142, 160, 110, "23 Out, 22:00", "Java / OpenGL")
-        )
+    val games by viewModel.games.collectAsState()
+    val isRecording by viewModel.isBenchmarkRecording.collectAsState()
+    val recordingPkg by viewModel.benchmarkRecordingPackage.collectAsState()
+    val recordingProfile by viewModel.benchmarkRecordingProfile.collectAsState()
+    val benchmarks by viewModel.benchmarkHistory.collectAsState()
+
+    val networkEnabled by viewModel.networkMonitorEnabled.collectAsState()
+    val latencyReport by viewModel.networkLatencyState.collectAsState()
+
+    var selectedGamePackage by remember { mutableStateOf(games.firstOrNull()?.packageName ?: "") }
+    var profileLabelInput by remember { mutableStateOf("Perfil Otimizado") }
+
+    var compareProfileA by remember { mutableStateOf<BenchmarkManager.ProfileBenchmarkResult?>(null) }
+    var compareProfileB by remember { mutableStateOf<BenchmarkManager.ProfileBenchmarkResult?>(null) }
+    var abComparisonResult by remember { mutableStateOf<BenchmarkManager.ABComparison?>(null) }
+
+    var selectedChartType by remember { mutableStateOf("line") }
+
+    val prefs = remember { context.getSharedPreferences("gfx_benchmark_prefs", Context.MODE_PRIVATE) }
+    var isRealMeasurementEnabled by remember {
+        mutableStateOf(prefs.getBoolean("real_measurement_enabled", false))
     }
 
-    var selectedChartType by remember { mutableStateOf("line") } // "line" or "bar"
-
-    val avgOverall = if (sessions.isNotEmpty()) sessions.map { it.averageFps }.average().toInt() else 0
-    val maxPeak = if (sessions.isNotEmpty()) sessions.maxOf { it.peakFps } else 0
-    val minLow = if (sessions.isNotEmpty()) sessions.minOf { it.lowestFps } else 0
+    LaunchedEffect(games) {
+        if (selectedGamePackage.isEmpty() && games.isNotEmpty()) {
+            selectedGamePackage = games.first().packageName
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -60,62 +70,13 @@ fun FpsMetricsTab(viewModel: GameViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // 1. Cabeçalho Principal com Switch de Medição Real Opcional
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "📊 Métricas & Gráficos de FPS (Analytics)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Análise de desempenho médio de FPS nas sessões de jogos registradas (Componente de visualização equivalente ao Recharts Analytics para Android).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // Resumo de Métricas (Cards)
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("FPS Médio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$avgOverall FPS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Pico Máximo", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$maxPeak FPS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                    }
-                }
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Mínimo Crítico", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$minLow FPS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
-                    }
-                }
-            }
-        }
-
-        // Componente Gráfico (Canvas interativo estilo Recharts Line / Bar)
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isRealMeasurementEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -123,178 +84,383 @@ fun FpsMetricsTab(viewModel: GameViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Evolução do FPS por Sessão",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = if (isRealMeasurementEnabled) MaterialTheme.colorScheme.primary else Color.Gray,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "📊 Medição Real (Framestats)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (isRealMeasurementEnabled) "Ativo: Medindo FPS real, 1% Low e Jank%" else "Opcional (Desativado)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isRealMeasurementEnabled) MaterialTheme.colorScheme.primary else Color.Gray
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isRealMeasurementEnabled,
+                            onCheckedChange = {
+                                isRealMeasurementEnabled = it
+                                prefs.edit().putBoolean("real_measurement_enabled", it).apply()
+                            }
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            FilterChip(
-                                selected = selectedChartType == "line",
-                                onClick = { selectedChartType = "line" },
-                                label = { Text("Linha", fontSize = 11.sp) }
-                            )
-                            FilterChip(
-                                selected = selectedChartType == "bar",
-                                onClick = { selectedChartType = "bar" },
-                                label = { Text("Colunas", fontSize = 11.sp) }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    val primaryColor = MaterialTheme.colorScheme.primary
-                    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
-                    val strokePx = with(density) { 1.dp.toPx() }
-                    val circleRadius = with(density) { 5.dp.toPx() }
-                    val strokeWidthPx = with(density) { 3.dp.toPx() }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val canvasWidth = size.width
-                            val canvasHeight = size.height
-                            val maxFps = 180f
-                            val stepX = canvasWidth / (sessions.size.coerceAtLeast(1))
-
-                            // Linhas de Grade de Fundo
-                            for (i in 0..4) {
-                                val y = canvasHeight * (i / 4f)
-                                drawLine(
-                                    color = surfaceVariantColor,
-                                    start = Offset(0f, y),
-                                    end = Offset(canvasWidth, y),
-                                    strokeWidth = strokePx
-                                )
-                            }
-
-                            if (selectedChartType == "line") {
-                                val path = Path()
-                                val fillPath = Path()
-                                fillPath.moveTo(0f, canvasHeight)
-
-                                sessions.forEachIndexed { index, session ->
-                                    val x = index * stepX + stepX / 2f
-                                    val y = canvasHeight - (session.averageFps / maxFps) * canvasHeight
-
-                                    if (index == 0) {
-                                        path.moveTo(x, y)
-                                        fillPath.lineTo(x, y)
-                                    } else {
-                                        path.lineTo(x, y)
-                                        fillPath.lineTo(x, y)
-                                    }
-
-                                    drawCircle(
-                                        color = primaryColor,
-                                        radius = circleRadius,
-                                        center = Offset(x, y)
-                                    )
-                                }
-
-                                fillPath.lineTo(canvasWidth, canvasHeight)
-                                fillPath.close()
-
-                                drawPath(
-                                    path = fillPath,
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(primaryColor.copy(alpha = 0.4f), primaryColor.copy(alpha = 0.0f)),
-                                        startY = 0f,
-                                        endY = canvasHeight
-                                    )
-                                )
-
-                                drawPath(
-                                    path = path,
-                                    color = primaryColor,
-                                    style = Stroke(width = strokeWidthPx)
-                                )
-                            } else {
-                                val barWidth = stepX * 0.6f
-                                sessions.forEachIndexed { index, session ->
-                                    val x = index * stepX + (stepX - barWidth) / 2f
-                                    val barHeight = (session.averageFps / maxFps) * canvasHeight
-                                    val y = canvasHeight - barHeight
-
-                                    drawRect(
-                                        color = primaryColor,
-                                        topLeft = Offset(x, y),
-                                        size = Size(barWidth, barHeight)
-                                    )
-                                }
-                            }
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Extrai métricas reais diretamente do subsistema do Android via 'dumpsys gfxinfo <pkg> framestats':\n• FPS Médio real\n• 1% Low FPS (percentil 99 dos tempos de quadro)\n• Jank % (porcentagem de quadros com engasgo)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
+        // 2. Card de Monitor de Latência & Jitter (Ping TCP sem privilégios)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        sessions.forEach { session ->
-                            Text(
-                                text = session.gameName.take(6) + "..",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Wifi, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Monitor de Rede (Ping TCP)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text("Mede latência e oscilação de rota até o servidor", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = networkEnabled,
+                            onCheckedChange = { viewModel.toggleNetworkMonitor(it) }
+                        )
+                    }
+
+                    if (networkEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Servidor: ${latencyReport.targetServerName}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                Text("Qualidade da rota: ${latencyReport.quality.name}", style = MaterialTheme.typography.labelSmall, color = when(latencyReport.quality) {
+                                    NetworkLatencyMonitor.NetworkQuality.EXCELENTE -> Color(0xFF2E7D32)
+                                    NetworkLatencyMonitor.NetworkQuality.BOM -> Color(0xFF1976D2)
+                                    NetworkLatencyMonitor.NetworkQuality.INSTAVEL -> Color(0xFFF57C00)
+                                    NetworkLatencyMonitor.NetworkQuality.CRITICO -> Color(0xFFD32F2F)
+                                })
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Ping", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${latencyReport.pingMs} ms", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Jitter", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("±${latencyReport.jitterMs} ms", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (latencyReport.jitterMs > 15) Color(0xFFD32F2F) else Color(0xFF2E7D32))
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
+        // 3. Seção de Gravação de Benchmark A/B em Tempo Real
         item {
-            Text(
-                text = "Histórico de Sessões de Jogos",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-        }
-
-        items(sessions, key = { it.id }) { session ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "🎮 Gravar Nova Medição de Perfil",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (!isRecording) {
+                        // Seleção do Jogo
+                        if (games.isNotEmpty()) {
+                            var expanded by remember { mutableStateOf(false) }
+                            val selectedGameName = games.find { it.packageName == selectedGamePackage }?.name ?: selectedGamePackage
+
+                            OutlinedCard(
+                                onClick = { expanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Jogo: $selectedGameName", style = MaterialTheme.typography.bodyMedium)
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                games.forEach { game ->
+                                    DropdownMenuItem(
+                                        text = { Text(game.name) },
+                                        onClick = {
+                                            selectedGamePackage = game.packageName
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = profileLabelInput,
+                            onValueChange = { profileLabelInput = it },
+                            label = { Text("Nome do Perfil") },
+                            placeholder = { Text("ex: Perfil A (Stock) ou Perfil B (MSAA off + 45FPS)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                if (selectedGamePackage.isNotBlank()) {
+                                    viewModel.startBenchmark(selectedGamePackage, profileLabelInput) { started ->
+                                        if (started) {
+                                            Toast.makeText(context, "Benchmark iniciado! Jogue por alguns instantes.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Falha ao iniciar medição no Shizuku.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Iniciar Gravação de Framestats")
+                        }
+                    } else {
+                        // Painel ativo de gravação
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.error)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Gravando dados de quadros em tempo real...", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Jogo: $recordingPkg | Perfil: $recordingProfile", style = MaterialTheme.typography.bodySmall)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        viewModel.stopBenchmark { result ->
+                                            if (result != null) {
+                                                Toast.makeText(context, "Medição concluída! Média: ${result.averageFps} FPS | 1% Low: ${result.onePercentLowFps} FPS", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                Toast.makeText(context, "Erro ao coletar relatório.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Finalizar e Salvar Perfil")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Comparador A/B de Perfis
+        if (benchmarks.size >= 2) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = session.gameName,
+                            text = "⚖️ Comparação A/B de Perfis",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = "Engine: ${session.engine} • ${session.timestamp}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            text = "${session.averageFps} FPS",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Seletor Perfil A
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Perfil A (Referência)", style = MaterialTheme.typography.labelSmall)
+                                var menuA by remember { mutableStateOf(false) }
+                                OutlinedButton(onClick = { menuA = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(compareProfileA?.profileName ?: "Selecionar A", maxLines = 1, fontSize = 11.sp)
+                                }
+                                DropdownMenu(expanded = menuA, onDismissRequest = { menuA = false }) {
+                                    benchmarks.forEach { b ->
+                                        DropdownMenuItem(
+                                            text = { Text("${b.profileName} (${b.averageFps} FPS)") },
+                                            onClick = {
+                                                compareProfileA = b
+                                                menuA = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Seletor Perfil B
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Perfil B (Otimizado)", style = MaterialTheme.typography.labelSmall)
+                                var menuB by remember { mutableStateOf(false) }
+                                OutlinedButton(onClick = { menuB = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(compareProfileB?.profileName ?: "Selecionar B", maxLines = 1, fontSize = 11.sp)
+                                }
+                                DropdownMenu(expanded = menuB, onDismissRequest = { menuB = false }) {
+                                    benchmarks.forEach { b ->
+                                        DropdownMenuItem(
+                                            text = { Text("${b.profileName} (${b.averageFps} FPS)") },
+                                            onClick = {
+                                                compareProfileB = b
+                                                menuB = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (compareProfileA != null && compareProfileB != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    abComparisonResult = viewModel.compareBenchmarks(compareProfileA!!, compareProfileB!!)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Comparar Eficácia A/B")
+                            }
+
+                            abComparisonResult?.let { comp ->
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(comp.verdict, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Column {
+                                                Text("FPS Médio:", style = MaterialTheme.typography.bodySmall)
+                                                Text("${comp.profileA.averageFps} → ${comp.profileB.averageFps} FPS (${if (comp.avgFpsGainPercent >= 0) "+" else ""}${String.format(java.util.Locale.US, "%.1f", comp.avgFpsGainPercent)}%)", fontWeight = FontWeight.Bold, color = if (comp.avgFpsGainPercent >= 0) Color(0xFF2E7D32) else Color(0xFFD32F2F))
+                                            }
+                                            Column {
+                                                Text("1% Low (Estabilidade):", style = MaterialTheme.typography.bodySmall)
+                                                Text("${comp.profileA.onePercentLowFps} → ${comp.profileB.onePercentLowFps} FPS (${if (comp.onePercentLowGainPercent >= 0) "+" else ""}${String.format(java.util.Locale.US, "%.1f", comp.onePercentLowGainPercent)}%)", fontWeight = FontWeight.Bold, color = if (comp.onePercentLowGainPercent >= 0) Color(0xFF2E7D32) else Color(0xFFD32F2F))
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Jank: ${comp.profileA.jankPercentage}% → ${comp.profileB.jankPercentage}%", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Histórico de Medições Reais Salvas
+        item {
+            Text(
+                text = "Histórico de Benchmarks Gravados (${benchmarks.size})",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (benchmarks.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("Nenhum benchmark gravado ainda. Inicie uma gravação acima.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        } else {
+            items(benchmarks, key = { it.id }) { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.profileName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text("Jogo: ${item.packageName} • ${item.durationSeconds}s de sessão", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "${item.averageFps} FPS",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text("1% Low: ${item.onePercentLowFps} FPS", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Color(0xFF1976D2))
+                            Text("Jank: ${item.jankPercentage}%", style = MaterialTheme.typography.bodySmall, color = if (item.jankPercentage > 5) Color(0xFFD32F2F) else Color(0xFF2E7D32))
+                            Text("Quadros: ${item.totalFrames}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }

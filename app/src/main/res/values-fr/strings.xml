@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">Résolution</string>
     <string name="compact_pak_bundle_btn">Compresser .pak &amp; .bundle</string>
     <string name="pak_bundle_compression_title">Compression .pak &amp; .bundle</string>
-    <string name="pak_bundle_safe_notice">Aucun système de vérification d\'intégrité détecté. Compression sûre.</string>
+    <string name="pak_bundle_safe_notice">Aucun système de vérification d\'intégrité. Il est peut-être possible de compresser les fichiers .pak et .bundle sans risque.</string>
+    <string name="game_action_force_doze">Forcer le Doze</string>
+    <string name="force_doze_dialog_title">Forcer le mode Doze du système</string>
+    <string name="force_doze_warning">Forcer le mode Doze complet suspend les sockets TCP/UDP et met le réseau en économie d\'énergie agressive, ce qui peut causer des pertes de paquets, une gigue élevée et des déconnexions dans les jeux en ligne. Recommandé uniquement pour les jeux hors ligne.</string>
+    <string name="force_doze_enable_btn">Activer Doze</string>
+    <string name="force_doze_disable_btn">Désactiver Doze</string>
+    <string name="ad_action_block_dns">Bloquer pubs (DNS AdGuard)</string>
+    <string name="ad_action_block_net">Bloquer Internet du jeu</string>
+    <string name="ad_action_disable_components">Désactiver composants de pub</string>
     <string name="pak_bundle_blocked_notice">Système d\'intégrité actif détecté. Compression bloquée.</string>
     <string name="gfx_tuner_title">Mode downgrade GFX Tuner</string>
     <string name="gfx_tuner_warning">Certaines optimisations peuvent être considérées comme de la triche.</string>

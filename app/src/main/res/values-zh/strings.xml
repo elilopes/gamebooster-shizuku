@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">分辨率</string>
     <string name="compact_pak_bundle_btn">压缩 .pak 和 .bundle</string>
     <string name="pak_bundle_compression_title">.pak 和 .bundle 压缩</string>
-    <string name="pak_bundle_safe_notice">未检测到完整性验证系统。压缩安全。</string>
+    <string name="pak_bundle_safe_notice">无完整性验证系统。或许可以安全压缩.pak和.bundle文件。</string>
+    <string name="game_action_force_doze">强制Doze休眠</string>
+    <string name="force_doze_dialog_title">强制系统Doze休眠模式</string>
+    <string name="force_doze_warning">强制完整系统Doze会暂停TCP/UDP套接字并将网络置于深度省电状态，这可能会导致在线游戏丢包、高抖动和掉线。建议仅在离线单机游戏中使用。</string>
+    <string name="force_doze_enable_btn">开启Doze</string>
+    <string name="force_doze_disable_btn">关闭Doze</string>
+    <string name="ad_action_block_dns">拦截广告 (AdGuard DNS)</string>
+    <string name="ad_action_block_net">禁止游戏联网</string>
+    <string name="ad_action_disable_components">禁用广告组件</string>
     <string name="pak_bundle_blocked_notice">检测到完整性系统。压缩已阻止。</string>
     <string name="gfx_tuner_title">GFX 调谐器降级模式</string>
     <string name="gfx_tuner_warning">某些优化可能被游戏开发商视为作弊。</string>

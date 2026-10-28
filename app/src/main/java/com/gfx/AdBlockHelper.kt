@@ -104,8 +104,64 @@ object AdBlockHelper {
     }
 
     fun isAdBlockingActive(): Boolean {
-        val currentSpec = ShellHelper.executePrivileged("settings get global private_dns_specifier").trim()
-        val currentMode = ShellHelper.executePrivileged("settings get global private_dns_mode").trim()
+        val currentSpec = ShellFunctions.executePrivileged("settings get global private_dns_specifier").trim()
+        val currentMode = ShellFunctions.executePrivileged("settings get global private_dns_mode").trim()
         return currentMode == "hostname" && currentSpec.contains("adguard", ignoreCase = true)
+    }
+
+    /**
+     * Desativa componentes nativos de anúncios (Activities, Services, Receivers) via pm disable
+     */
+    fun disableAdComponents(pm: PackageManager, packageName: String): Int {
+        var disabledCount = 0
+        try {
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+            } else {
+                @Suppress("DEPRECATION")
+                PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+            }
+            val packageInfo: PackageInfo = pm.getPackageInfo(packageName, flags)
+            val allComponents = mutableListOf<String>()
+
+            packageInfo.activities?.forEach { allComponents.add(it.name) }
+            packageInfo.services?.forEach { allComponents.add(it.name) }
+            packageInfo.receivers?.forEach { allComponents.add(it.name) }
+
+            for (component in allComponents) {
+                for ((_, signatures) in KNOWN_AD_NETWORKS) {
+                    if (signatures.any { component.contains(it, ignoreCase = true) }) {
+                        val cmd = "pm disable \"$packageName/$component\""
+                        val out = ShellFunctions.executePrivileged(cmd)
+                        if (out.contains("disabled", ignoreCase = true) || out.contains("new state", ignoreCase = true)) {
+                            disabledCount++
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return disabledCount
+    }
+
+    /**
+     * Bloqueia ou libera acesso à rede do aplicativo via iptables e policy
+     */
+    fun toggleGameInternet(pm: PackageManager, packageName: String, block: Boolean): Boolean {
+        return try {
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            val uid = appInfo.uid
+            if (block) {
+                ShellFunctions.executePrivileged("iptables -I OUTPUT -m owner --uid-owner $uid -j DROP")
+                ShellFunctions.executePrivileged("cmd netpolicy add restrict-background-blacklist $uid")
+            } else {
+                ShellFunctions.executePrivileged("iptables -D OUTPUT -m owner --uid-owner $uid -j DROP")
+                ShellFunctions.executePrivileged("cmd netpolicy remove restrict-background-blacklist $uid")
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 }

@@ -32,7 +32,15 @@
     <string name="game_resolution_btn">रिज़ॉल्यूशन</string>
     <string name="compact_pak_bundle_btn">.pak और .bundle संकुचित करें</string>
     <string name="pak_bundle_compression_title">.pak और .bundle संपीड़न</string>
-    <string name="pak_bundle_safe_notice">कोई अखंडता सत्यापन प्रणाली नहीं मिली। सुरक्षित।</string>
+    <string name="pak_bundle_safe_notice">कोई अखंडता सत्यापन प्रणाली नहीं। .pak और .bundle फ़ाइलों को सुरक्षित रूप से संपीड़ित करना संभव हो सकता है।</string>
+    <string name="game_action_force_doze">Doze बाध्य करें</string>
+    <string name="force_doze_dialog_title">सिस्टम Doze मोड बाध्य करें</string>
+    <string name="force_doze_warning">पूर्ण सिस्टम Doze को बाध्य करने से TCP/UDP सॉकेट निलंबित हो जाते हैं और नेटवर्क अत्यधिक ऊर्जा-बचत में चला जाता है, जिससे पैकेट की हानि, उच्च जिटर और ऑनलाइन गेम में डिस्कनेक्शन हो सकता है। केवल ऑफ़लाइन गेम में उपयोग करने की सलाह दी जाती है।</string>
+    <string name="force_doze_enable_btn">Doze सक्षम करें</string>
+    <string name="force_doze_disable_btn">Doze अक्षम करें</string>
+    <string name="ad_action_block_dns">विज्ञापन ब्लॉक करें (AdGuard DNS)</string>
+    <string name="ad_action_block_net">गेम का इंटरनेट ब्लॉक करें</string>
+    <string name="ad_action_disable_components">विज्ञापन घटक अक्षम करें</string>
     <string name="pak_bundle_blocked_notice">सक्रिय अखंडता प्रणाली का पता चला। संपीड़न अवरुद्ध है।</string>
     <string name="gfx_tuner_title">GFX ट्यूनर डाउनग्रेड मोड</string>
     <string name="gfx_tuner_warning">कुछ अनुकूलन धोखाधड़ी माने जा सकते हैं।</string>

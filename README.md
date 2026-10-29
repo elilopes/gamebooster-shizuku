@@ -1,4 +1,5 @@
 # GFX Game Booster Android
+Download beta: https://drive.google.com/file/d/1x24gAP11pIWJWIFArxqGTA1OAfF4nkZb/view?usp=sharing
 
 ## English
 

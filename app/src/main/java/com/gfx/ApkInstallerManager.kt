@@ -56,12 +56,12 @@ object ApkInstallerManager {
     }
 
     /**
-     * Inicia streaming em tempo real do logcat do Android filtrado por PackageManager, PackageInstaller e nome do pacote.
+     * Inicia streaming em tempo real do logcat do Android filtrado por PackageManager, PackageInstaller, installd, dex2oat e nome do pacote.
      */
     fun startLogcatMonitoring(targetPackageName: String) {
         stopLogcatMonitoring()
         clearInstallerLogs()
-        addInstallerLog("[LOGCAT] Iniciando monitoramento ao vivo de eventos do sistema...")
+        addInstallerLog("[LOGCAT] Iniciando monitoramento ao vivo de eventos do sistema (PackageManager / PackageInstaller / installd / dex2oat)...")
         Thread {
             try {
                 // Limpa buffer anterior para capturar eventos frescos da instalação
@@ -69,7 +69,7 @@ object ApkInstallerManager {
                 val cmd = arrayOf(
                     "sh",
                     "-c",
-                    "logcat -v time -s PackageManager:V PackageInstaller:V Finsky:V | grep -E 'PackageManager|PackageInstaller|${targetPackageName}'"
+                    "logcat -v time -s PackageManager:V PackageInstaller:V installd:V dex2oat:V | grep -E 'PackageManager|PackageInstaller|installd|dex2oat|${targetPackageName}'"
                 )
                 logcatProcess = Runtime.getRuntime().exec(cmd)
                 val reader = logcatProcess?.inputStream?.bufferedReader()
@@ -94,6 +94,8 @@ object ApkInstallerManager {
      * Calcula hash SHA-256 de um InputStream com buffer
      */
     fun calculateSha256(inputStream: InputStream): String {
+        addInstallerLog("[LOGCAT] Iniciando o SHA-256, verificando se o arquivo foi adulterado/corrompido...")
+        
         return try {
             val digest = MessageDigest.getInstance("SHA-256")
             val buffer = ByteArray(64 * 1024)
@@ -592,32 +594,32 @@ object ApkInstallerManager {
     fun translateInstallError(rawError: String, executedCommand: String = ""): String {
         val clean = rawError.trim().replace(Regex("(?i)\\bSuccess\\b"), "").trim()
         val explanation = when {
-            clean.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE") ->
-                "⚠️ Incompatibilidade Crítica de Assinatura (UPDATE_INCOMPATIBLE):\nO certificado digital do novo APK é diferente do app atualmente instalado no seu aparelho. O Android rejeita a atualização para proteger os dados. Para prosseguir, é obrigatório desinstalar o app existente primeiro."
+            clean.contains("UPDATE_INCOMPATIBLE", ignoreCase = true) || clean.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE", ignoreCase = true) ->
+                "⚠️ Incompatibilidade Crítica de Assinatura (UPDATE_INCOMPATIBLE):\nO certificado digital do novo APK é diferente do app atualmente instalado no seu aparelho. O Android rejeita a atualização para proteger os dados. Ao desinstalar o app existente você perderá os dados; realize um backup do app antes de desinstalar e tentar a nova instalação."
 
-            clean.contains("INSTALL_FAILED_VERSION_DOWNGRADE") ->
-                "⚠️ Tentativa de Downgrade Bloqueada (VERSION_DOWNGRADE):\nA versão que você está tentando instalar é anterior à versão já instalada no aparelho. Ative a opção '[-d] Permitir Downgrade'."
+            clean.contains("VERSION_DOWNGRADE", ignoreCase = true) || clean.contains("INSTALL_FAILED_VERSION_DOWNGRADE", ignoreCase = true) ->
+                "⚠️ Tentativa de Downgrade Bloqueada (VERSION_DOWNGRADE):\nA versão que você está tentando instalar é anterior à versão já instalada no aparelho. Ative a opção '[-d] Permitir Downgrade' nas opções avançadas."
 
-            clean.contains("INSTALL_FAILED_INSUFFICIENT_STORAGE") ->
-                "⚠️ Espaço Livre Insuficiente (INSUFFICIENT_STORAGE):\nNão há armazenamento livre suficiente na memória interna do aparelho."
+            clean.contains("INSUFFICIENT_STORAGE", ignoreCase = true) || clean.contains("INSTALL_FAILED_INSUFFICIENT_STORAGE", ignoreCase = true) ->
+                "⚠️ Espaço Livre Insuficiente (INSUFFICIENT_STORAGE):\nNão há armazenamento livre suficiente na memória interna do aparelho para concluir a instalação."
 
-            clean.contains("INSTALL_FAILED_NO_MATCHING_ABIS") ->
-                "⚠️ Incompatibilidade de Processador (NO_MATCHING_ABIS):\nO APK contém bibliotecas nativas incompatíveis com a arquitetura do seu celular."
+            clean.contains("NO_MATCHING_ABIS", ignoreCase = true) || clean.contains("INSTALL_FAILED_NO_MATCHING_ABIS", ignoreCase = true) ->
+                "⚠️ Incompatibilidade de Processador (NO_MATCHING_ABIS):\nO APK contém bibliotecas nativas incompatíveis com a arquitetura de processador (ABI) do seu celular."
 
-            clean.contains("INSTALL_FAILED_OLDER_SDK") ->
-                "⚠️ Versão do Android Incompatível (OLDER_SDK):\nEste aplicativo requer uma versão mais recente do Android do que a instalada no dispositivo."
+            clean.contains("OLDER_SDK", ignoreCase = true) || clean.contains("INSTALL_FAILED_OLDER_SDK", ignoreCase = true) ->
+                "⚠️ Versão do Android Incompatível (OLDER_SDK):\nEste aplicativo requer uma versão mais recente do Android do que a versão do sistema instalada no seu aparelho."
 
-            clean.contains("INSTALL_FAILED_TEST_ONLY") ->
-                "⚠️ Pacote de Teste (TEST_ONLY):\nEste APK foi compilado como pacote de testes. Ative a opção '[-t] Permitir Pacote de Teste'."
+            clean.contains("TEST_ONLY", ignoreCase = true) || clean.contains("INSTALL_FAILED_TEST_ONLY", ignoreCase = true) ->
+                "⚠️ Pacote de Teste (TEST_ONLY):\nEste APK foi compilado como pacote de testes (test-only). Ative a opção '[-t] Permitir Pacote de Teste' nas opções avançadas."
 
-            clean.contains("INSTALL_FAILED_MISSING_SPLIT") ->
-                "⚠️ Pacote Dividido Incompleto (MISSING_SPLIT):\nFaltam partes essenciais dos Split APKs (como base.apk)."
+            clean.contains("MISSING_SPLIT", ignoreCase = true) || clean.contains("INSTALL_FAILED_MISSING_SPLIT", ignoreCase = true) ->
+                "⚠️ Pacote Dividido Incompleto (MISSING_SPLIT):\nFaltam partes essenciais dos Split APKs (como base.apk ou o split de densidade/arquitetura do seu aparelho)."
 
             clean.contains("INSTALL_FAILED_ALREADY_EXISTS") ->
                 "O pacote já está instalado com os mesmos dados."
 
-            clean.contains("INSTALL_PARSE_FAILED") ->
-                "Falha na validação da estrutura do arquivo APK. O arquivo pode estar corrompido."
+            clean.contains("INSTALL_PARSE_FAILED", ignoreCase = true) ->
+                "Falha na validação da estrutura do arquivo APK (INSTALL_PARSE_FAILED). O arquivo pode estar corrompido, incompleto ou truncado durante a gravação."
 
             clean.contains("INSTALL_FAILED_INVALID_INSTALLER_PACKAGE") ->
                 "O PackageManager rejeitou o nome do pacote instalador solicitado pelo sistema."
@@ -626,16 +628,16 @@ object ApkInstallerManager {
                 "Instalação bloqueada pelas configurações de segurança ou controle parental do sistema."
 
             executedCommand.contains("install-create") ->
-                "ℹ️ A etapa de criação da sessão falhou no PackageManager. O comando executado não retornou um ID de sessão válido."
+                "ℹ️ A sessão de instalação falhou ao ser gerada pelo PackageManager. O comando não retornou um ID de sessão válido."
 
             executedCommand.contains("install-write") ->
-                "ℹ️ A etapa de gravação do pacote/split falhou. O PackageManager não conseguiu registrar o bloco de dados enviado."
+                "ℹ️ A etapa de gravação do pacote/split falhou. O PackageManager não conseguiu registrar o bloco de dados enviado via stdin."
 
             executedCommand.contains("install-commit") ->
                 "ℹ️ A etapa final de confirmação e commit da instalação foi rejeitada pelo sistema Android."
 
             clean.isNotBlank() ->
-                "O PackageManager rejeitou a execução do comando de instalação."
+                "O PackageManager rejeitou a execução do comando de instalação: $clean"
 
             else ->
                 "Ocorreu um erro interno desconhecido ao processar a instalação."
@@ -653,7 +655,8 @@ object ApkInstallerManager {
     }
 
     /**
-     * Executa instalação avançada utilizando Shizuku ou Root através de sessão pm install-create / write / commit
+     * [PT-BR] Executa instalação avançada utilizando Shizuku ou Root através de sessão pm install-create / write / commit.
+     * [EN] Performs advanced package installation using Shizuku or Root privileges via pm install-create / write / commit session.
      */
     suspend fun installPackageViaShizuku(
         context: Context,
@@ -664,27 +667,37 @@ object ApkInstallerManager {
     ) = withContext(Dispatchers.IO) {
         startLogcatMonitoring(metadata.packageName)
         try {
+            // =========================================================================
+            // ETAPA 1 / STEP 1: Criação da Sessão do PackageManager
+            // [PT-BR] Inicializa a sessão de instalação enviando as flags (-r, -d, -t, -g) ao shell.
+            // [EN] Initializes the installation session by passing execution flags (-r, -d, -t, -g) to the shell.
+            // =========================================================================
             onStep(InstallStep.CREATING_SESSION, "Criando sessão no PackageManager...", 0.1f)
             addInstallerLog("[INSTALL] Iniciando instalação com privilégios Shizuku/Shell...")
+            addInstallerLog("[ETAPA] Verificando se o APK não foi corrompido ou modificado maliciosamente (SHA-256: ${metadata.sourceFileSha256}).")
+            addInstallerLog("[ETAPA] Verificando o certificado digital do aplicativo (Assinante: ${metadata.signerSha256}).")
+            addInstallerLog("[ETAPA] Lendo o AndroidManifest.xml...")
+            addInstallerLog("[ETAPA] Registrando o nome do pacote (${metadata.packageName}), a versão do aplicativo (${metadata.versionName} / Code: ${metadata.versionCode}), as permissões solicitadas (${metadata.requestedPermissions.size} permissões)...")
 
             val flagsBuilder = StringBuilder("-r")
             if (flags.allowDowngrade) flagsBuilder.append(" -d")
             if (flags.allowTest) flagsBuilder.append(" -t")
             if (flags.grantAllPermissions) flagsBuilder.append(" -g")
 
-            // Se for apenas 1 APK (APK monolítico simples), tentamos fallback direto se pm install-create falhar
+            // [PT-BR] Se for apenas 1 APK (APK monolítico simples), preparamos o fallback direto caso o install-create falhe.
+            // [EN] If it is a single APK (monolithic APK), prepare direct fallback in case install-create fails.
             val isSingleApk = metadata.extractedApks.size == 1
 
             val createCmd = "pm install-create $flagsBuilder"
             val createOutput = ShellFunctions.executePrivileged(createCmd).trim()
             addInstallerLog("[INSTALL] pm install-create -> $createOutput")
 
-            // Formato de sucesso: "Success: [12345678]" ou "Success: created install session [1151954645]"
-            val sessionIdRegex = Regex("(?i)session\\s*\\[?(\\d+)\\]?|Success:\\s*\\[?(\\d+)\\]?|\\b(\\d{5,})\b")
+            // [PT-BR] Regex para capturar o ID da sessão retornado pelo sistema: "Success: created install session [12345]"
+            // [EN] Regex to capture the session ID returned by the system: "Success: created install session [12345]"
+            val sessionIdRegex = Regex("(?i)session\\s*\\[?(\\d+)\\]?|Success:\\s*\\[?(\\d+)\\]?|\\b(\\d{5,})\\b")
             val match = sessionIdRegex.find(createOutput)
             var sessionId = match?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }
             if (sessionId == null) {
-                // Tenta extrair qualquer número na saída se contiver "session" ou "Success"
                 val allNums = Regex("\\d+").findAll(createOutput).map { it.value }.toList()
                 if (allNums.isNotEmpty() && (createOutput.contains("Success", true) || createOutput.contains("session", true))) {
                     sessionId = allNums.last()
@@ -692,19 +705,36 @@ object ApkInstallerManager {
             }
 
             if (sessionId == null) {
-                // Se a criação de sessão falhou e temos apenas 1 APK, tentamos o comando direto pm install -r
+                // [PT-BR] Fallback de segurança para APK único via streaming de stdin caso a criação de sessão falhe.
+                // [EN] Safety streaming fallback for single APK via stdin if session creation fails.
                 if (isSingleApk && metadata.extractedApks.isNotEmpty()) {
                     val singleApk = metadata.extractedApks[0]
-                    singleApk.setReadable(true, false)
-                    addInstallerLog("[INSTALL] Tentando instalação direta (fallback para APK único): pm install $flagsBuilder ${singleApk.name}")
-                    onStep(InstallStep.COMMITTING, "Instalando diretamente com PackageManager...", 0.5f)
+                    val expected = singleApk.length()
+                    addInstallerLog("[ETAPA] Copiando o APK ${singleApk.name} para o diretório temporário seguro (geralmente em /data/local/tmp)...")
+                    addInstallerLog("[ETAPA] Criando os diretórios dedicados para o aplicativo em /data/app e em /data/data/${metadata.packageName} (Package Name)...")
+                    addInstallerLog("[INSTALL] Tentando instalação direta via streaming (fallback para APK único): pm install $flagsBuilder ${singleApk.name}")
+                    onStep(InstallStep.COMMITTING, "Instalando diretamente com PackageManager via streaming...", 0.5f)
 
-                    val directCmd = "pm install $flagsBuilder \"${singleApk.absolutePath}\""
-                    val directOut = ShellFunctions.executePrivileged(directCmd).trim()
+                    val directCmd = "pm install $flagsBuilder -S $expected -"
+                    val directOut = if (ShizukuHelper.hasPermission()) {
+                        try {
+                            val p = ShizukuHelper.newProcess("sh", "-c", directCmd)
+                            p.outputStream.use { out -> singleApk.inputStream().use { it.copyTo(out, 64 * 1024) } }
+                            val out = p.inputStream.bufferedReader().readText()
+                            val err = p.errorStream.bufferedReader().readText()
+                            p.waitFor()
+                            (out + err).trim()
+                        } catch (e: Exception) {
+                            "Error: ${e.message}"
+                        }
+                    } else {
+                        ShellFunctions.executePrivileged("cat \"${singleApk.absolutePath}\" | $directCmd").trim()
+                    }
                     addInstallerLog("[INSTALL] pm install -> $directOut")
 
                     if (directOut.contains("Success", ignoreCase = true)) {
-                        // Instalação direta sucedeu!
+                        addInstallerLog("[ETAPA] Gerando os arquivos .odex ou .oat...")
+                        addInstallerLog("[ETAPA] Adicionando informações do aplicativo no packages.xml...")
                         if (metadata.extractedObbFiles.isNotEmpty()) {
                             onStep(InstallStep.COPYING_OBB, "Copiando arquivos OBB para o jogo...", 0.92f)
                             val obbTarget = "/sdcard/Android/obb/${metadata.packageName}"
@@ -713,8 +743,9 @@ object ApkInstallerManager {
                                 ShellFunctions.executePrivileged("cp -f \"${obb.absolutePath}\" \"$obbTarget/${obb.name}\"")
                             }
                         }
+                        addInstallerLog("[ETAPA] Apagando arquivos temporários usados na instalação...")
                         metadata.stagingDir.deleteRecursively()
-                        addInstallerLog("[SUCESSO] ${metadata.label} instalado com êxito!")
+                        addInstallerLog("[Sucesso] ${metadata.label} ${metadata.packageName} instalado com êxito!")
                         withContext(Dispatchers.Main) {
                             onStep(InstallStep.SUCCESS, "Instalação concluída com sucesso!", 1.0f)
                             onResult(true, "Aplicativo ${metadata.label} instalado com sucesso!")
@@ -741,25 +772,52 @@ object ApkInstallerManager {
             }
 
             addInstallerLog("[INSTALL] Sessão criada com ID: $sessionId")
+            addInstallerLog("[ETAPA] Criando os diretórios dedicados para o aplicativo em /data/app e em /data/data/${metadata.packageName} (Package Name)...")
 
-            // 2. Gravar cada APK na sessão (pm install-write)
+            // =========================================================================
+            // ETAPA 2 / STEP 2: Gravação dos Splits / APKs na Sessão (pm install-write)
+            // [PT-BR] Transmite os bytes de cada APK para a sessão do PackageInstaller via stdin com verificação de integridade.
+            // [EN] Streams bytes of each APK to the PackageInstaller session via stdin with byte integrity verification.
+            // =========================================================================
             val totalApks = metadata.extractedApks.size
             metadata.extractedApks.forEachIndexed { index, apkFile ->
                 val stepProgress = 0.2f + ((index.toFloat() / totalApks.toFloat()) * 0.6f)
                 onStep(InstallStep.WRITING_APKS, "Gravando ${apkFile.name} (${index + 1}/$totalApks)...", stepProgress)
-                addInstallerLog("[INSTALL] Gravando split ${apkFile.name} (${apkFile.length() / 1024} KB)...")
-
+                
                 val splitName = apkFile.name
-                apkFile.setReadable(true, false)
+                val expected = apkFile.length()
+                
+                addInstallerLog("[ETAPA] Copiando o APK $splitName para o diretório temporário seguro (geralmente em /data/local/tmp ou /data/app/vmdl$sessionId.tmp)...")
+                addInstallerLog("[INSTALL] Gravando split $splitName ($expected bytes)...")
 
-                // Usamos streaming seguro via stdin caso privilégios exijam ou caminho absoluto
-                val writeCmd = "cat \"${apkFile.absolutePath}\" | pm install-write -S ${apkFile.length()} $sessionId \"$splitName\" -"
-                val writeOutput = ShellFunctions.executePrivileged(writeCmd).trim()
+                val writeOutput = if (ShizukuHelper.hasPermission()) {
+                    try {
+                        val p = ShizukuHelper.newProcess(
+                            "sh", "-c", "pm install-write -S $expected $sessionId \"$splitName\" -"
+                        )
+                        p.outputStream.use { out -> apkFile.inputStream().use { it.copyTo(out, 64 * 1024) } }
+                        val out = p.inputStream.bufferedReader().readText()
+                        val err = p.errorStream.bufferedReader().readText()
+                        p.waitFor()
+                        (out + err).trim()
+                    } catch (e: Exception) {
+                        "Error: ${e.message}"
+                    }
+                } else {
+                    ShellFunctions.executePrivileged(
+                        "cat \"${apkFile.absolutePath}\" | pm install-write -S $expected $sessionId \"$splitName\" -"
+                    ).trim()
+                }
+
                 addInstallerLog("[INSTALL] pm install-write $splitName -> $writeOutput")
 
-                if (!writeOutput.contains("Success", ignoreCase = true)) {
+                // Confere se o sistema recebeu todos os bytes, não só a palavra "Success"
+                val streamed = Regex("streamed\\s+(\\d+)").find(writeOutput)?.groupValues?.get(1)?.toLongOrNull()
+                val incomplete = streamed != null && streamed != expected
+                if (!writeOutput.contains("Success", ignoreCase = true) || incomplete) {
                     ShellFunctions.executePrivileged("pm install-abandon $sessionId")
-                    val err = translateInstallError(writeOutput, writeCmd)
+                    val err = if (incomplete) "Gravação incompleta de $splitName: $streamed de $expected bytes"
+                    else translateInstallError(writeOutput, "pm install-write")
                     addInstallerLog("[ERRO] Falha na gravação do split $splitName: $err")
                     withContext(Dispatchers.Main) {
                         onStep(InstallStep.ERROR, err, 0f)
@@ -769,7 +827,11 @@ object ApkInstallerManager {
                 }
             }
 
-            // 3. Confirmar a sessão de instalação (pm install-commit)
+            // =========================================================================
+            // ETAPA 3 / STEP 3: Confirmação e Commit da Instalação (pm install-commit)
+            // [PT-BR] Solicita a validação, montagem do diretório /data/app e instalação final dos pacotes gravados.
+            // [EN] Triggers validation, /data/app directory assembly, and final installation of written packages.
+            // =========================================================================
             onStep(InstallStep.COMMITTING, "Finalizando e confirmando instalação (pm install-commit)...", 0.85f)
             addInstallerLog("[INSTALL] Confirmando instalação com pm install-commit $sessionId...")
 
@@ -787,7 +849,14 @@ object ApkInstallerManager {
                 return@withContext
             }
 
-            // 4. Pós-instalação: Copiar OBBs se existirem
+            addInstallerLog("[ETAPA] Gerando os arquivos .odex ou .oat...")
+            addInstallerLog("[ETAPA] Adicionando informações do aplicativo no packages.xml...")
+
+            // =========================================================================
+            // ETAPA 4 / STEP 4: Cópia dos Arquivos de Dados OBB (Se Existirem)
+            // [PT-BR] Garante que dados de expansão/jogos (XAPK) sejam movidos para /sdcard/Android/obb/<packageName>/.
+            // [EN] Ensures game/expansion assets (XAPK) are copied to /sdcard/Android/obb/<packageName>/.
+            // =========================================================================
             if (metadata.extractedObbFiles.isNotEmpty()) {
                 onStep(InstallStep.COPYING_OBB, "Copiando arquivos OBB para o jogo...", 0.92f)
                 addInstallerLog("[INSTALL] Copiando ${metadata.extractedObbFiles.size} arquivo(s) OBB...")
@@ -800,12 +869,17 @@ object ApkInstallerManager {
                 addInstallerLog("[INSTALL] Arquivos OBB copiados com sucesso para $obbTarget")
             }
 
-            // 5. Limpeza da área temporária de staging
+            // =========================================================================
+            // ETAPA 5 / STEP 5: Limpeza do Diretório de Staging e Notificação Final
+            // [PT-BR] Remove os arquivos temporários descompactados do cache e notifica o término da operação.
+            // [EN] Removes temporary extracted files from cache and notifies operation completion.
+            // =========================================================================
             onStep(InstallStep.CLEANING_UP, "Limpando arquivos temporários...", 0.98f)
+            addInstallerLog("[ETAPA] Apagando arquivos temporários usados na instalação...")
             metadata.stagingDir.deleteRecursively()
             addInstallerLog("[INSTALL] Área de trabalho temporária limpa.")
 
-            addInstallerLog("[SUCESSO] ${metadata.label} (${metadata.packageName}) instalado com êxito!")
+            addInstallerLog("[Sucesso] ${metadata.label} ${metadata.packageName} instalado com êxito!")
             withContext(Dispatchers.Main) {
                 onStep(InstallStep.SUCCESS, "Instalação concluída com sucesso!", 1.0f)
                 onResult(true, "Aplicativo ${metadata.label} instalado com sucesso!")

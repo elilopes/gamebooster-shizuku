@@ -70,6 +70,89 @@ class BackupApp(
     }
 
     /**
+     * Descompacta um arquivo ZIP usando a API Java padrão (evita restrições de permissão do comando unzip no shell)
+     */
+    private fun extractZip(zipFile: File, destDir: File) {
+        java.util.zip.ZipFile(zipFile).use { zip ->
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                val outFile = File(destDir, entry.name)
+                if (entry.isDirectory) {
+                    outFile.mkdirs()
+                } else {
+                    outFile.parentFile?.mkdirs()
+                    zip.getInputStream(entry).use { inS ->
+                        outFile.outputStream().use { outS -> inS.copyTo(outS) }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Instala um ou mais arquivos APK usando streaming via stdin (ShizukuHelper.newProcess ou Root).
+     * Evita problemas de leitura de diretórios privados do aplicativo pelo usuário shell do ADB.
+     */
+    private fun installApkFiles(apks: Array<File>): Pair<Boolean, String> {
+        if (apks.isEmpty()) return Pair(false, "Nenhum arquivo APK para instalar.")
+        return try {
+            if (apks.size == 1) {
+                val apk = apks[0]
+                val expected = apk.length()
+                val cmd = "pm install -r -S $expected -"
+                val output = if (ShizukuHelper.hasPermission()) {
+                    val p = ShizukuHelper.newProcess("sh", "-c", cmd)
+                    p.outputStream.use { out -> apk.inputStream().use { it.copyTo(out, 64 * 1024) } }
+                    val out = p.inputStream.bufferedReader().readText()
+                    val err = p.errorStream.bufferedReader().readText()
+                    p.waitFor()
+                    (out + err).trim()
+                } else {
+                    ShellFunctions.executePrivileged("cat \"${apk.absolutePath}\" | $cmd").trim()
+                }
+                if (output.contains("Success", ignoreCase = true)) {
+                    Pair(true, output)
+                } else {
+                    Pair(false, output)
+                }
+            } else {
+                val createOut = ShellFunctions.executePrivileged("pm install-create -r").trim()
+                val sessionIdRegex = Regex("(?i)session\\s*\\[?(\\d+)\\]?|Success:\\s*\\[?(\\d+)\\]?|\\b(\\d{5,})\\b")
+                val sessionId = sessionIdRegex.find(createOut)?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }
+                if (sessionId == null) {
+                    return Pair(false, "Falha ao criar sessão do PackageManager: $createOut")
+                }
+                for (apk in apks) {
+                    val expected = apk.length()
+                    val writeOut = if (ShizukuHelper.hasPermission()) {
+                        val p = ShizukuHelper.newProcess("sh", "-c", "pm install-write -S $expected $sessionId \"${apk.name}\" -")
+                        p.outputStream.use { out -> apk.inputStream().use { it.copyTo(out, 64 * 1024) } }
+                        val out = p.inputStream.bufferedReader().readText()
+                        val err = p.errorStream.bufferedReader().readText()
+                        p.waitFor()
+                        (out + err).trim()
+                    } else {
+                        ShellFunctions.executePrivileged("cat \"${apk.absolutePath}\" | pm install-write -S $expected $sessionId \"${apk.name}\" -").trim()
+                    }
+                    if (!writeOut.contains("Success", ignoreCase = true)) {
+                        ShellFunctions.executePrivileged("pm install-abandon $sessionId")
+                        return Pair(false, "Falha ao gravar ${apk.name}: $writeOut")
+                    }
+                }
+                val commitOut = ShellFunctions.executePrivileged("pm install-commit $sessionId").trim()
+                if (commitOut.contains("Success", ignoreCase = true)) {
+                    Pair(true, commitOut)
+                } else {
+                    Pair(false, commitOut)
+                }
+            }
+        } catch (e: Exception) {
+            Pair(false, "Exceção ao instalar APK: ${e.message}")
+        }
+    }
+
+    /**
      * Executa o backup de um aplicativo selecionado.
      * Não bloqueia caso o Shizuku não esteja em execução:
      * O APK é copiado diretamente via PackageManager e sistema de arquivos.
@@ -184,6 +267,19 @@ class BackupApp(
                 var finalPath = targetFolder.absolutePath
                 if (compressZip) {
                     val zipFile = File(backupDir, "${packageName}_$timestamp.zip")
+
+                    // [PT-BR] Se o APK foi selecionado, mantém uma cópia do APK fora do zip na mesma pasta backupDir.
+                    // Isso permite reinstalar ou exportar o APK diretamente sem descompactar o arquivo ZIP completo.
+                    if (includeApk) {
+                        val baseApkInFolder = File(targetFolder, "base.apk")
+                        if (baseApkInFolder.exists()) {
+                            baseApkInFolder.copyTo(File(backupDir, "${packageName}_$timestamp.apk"), overwrite = true)
+                        } else {
+                            val anyApk = targetFolder.listFiles { f -> f.name.endsWith(".apk") }?.firstOrNull()
+                            anyApk?.copyTo(File(backupDir, "${packageName}_$timestamp.apk"), overwrite = true)
+                        }
+                    }
+
                     var zipSuccess = false
                     try {
                         zipFolder(targetFolder, zipFile)
@@ -214,7 +310,8 @@ class BackupApp(
 
                 withContext(Dispatchers.Main) {
                     if (hasResult) {
-                        onResult(true, "Backup salvo com sucesso em: $finalPath")
+                        val extraMsg = if (compressZip && includeApk) " (APK mantido também avulso na mesma pasta para reinstalação rápida)" else ""
+                        onResult(true, "Backup salvo com sucesso em: $finalPath$extraMsg")
                     } else {
                         onResult(false, "Nenhum arquivo pôde ser copiado para o backup.")
                     }
@@ -279,20 +376,35 @@ class BackupApp(
                 val tempExtract = File(context.cacheDir, "restore_${System.currentTimeMillis()}")
                 tempExtract.mkdirs()
 
-                if (backupFile.name.endsWith(".zip")) {
-                    ShellFunctions.executePrivileged("unzip -q -o \"${backupFile.absolutePath}\" -d \"${tempExtract.absolutePath}\"")
+                if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                    extractZip(backupFile, tempExtract)
                 } else if (backupFile.isDirectory) {
-                    ShellFunctions.executePrivileged("cp -r \"${backupFile.absolutePath}/.\" \"${tempExtract.absolutePath}/\"")
+                    backupFile.walkTopDown().forEach { file ->
+                        if (file.isFile) {
+                            val rel = file.relativeTo(backupFile).path
+                            val dest = File(tempExtract, rel)
+                            dest.parentFile?.mkdirs()
+                            file.copyTo(dest, overwrite = true)
+                        }
+                    }
                 }
 
-                // 1. Instalar APKs se existirem
+                // 1. Instalar APKs se existirem (ou verificar se existe APK irmão avulso na pasta do backup)
                 val apks = tempExtract.listFiles { f -> f.name.endsWith(".apk") } ?: emptyArray()
-                if (apks.isNotEmpty()) {
-                    if (apks.size == 1) {
-                        ShellFunctions.executePrivileged("pm install -r \"${apks[0].absolutePath}\"")
-                    } else {
-                        val allApkPaths = apks.joinToString(" ") { "\"${it.absolutePath}\"" }
-                        ShellFunctions.executePrivileged("pm install-multiple -r $allApkPaths")
+                val effectiveApks = if (apks.isEmpty() && backupFile.isFile) {
+                    val sibling = File(backupFile.parentFile, backupFile.nameWithoutExtension + ".apk")
+                    if (sibling.exists()) arrayOf(sibling) else emptyArray()
+                } else apks
+
+                if (effectiveApks.isNotEmpty()) {
+                    val (success, installOut) = installApkFiles(effectiveApks)
+                    if (!success) {
+                        tempExtract.deleteRecursively()
+                        val err = ApkInstallerManager.translateInstallError(installOut, "pm install")
+                        withContext(Dispatchers.Main) {
+                            onResult(false, "Falha na instalação do APK durante a restauração:\n$err")
+                        }
+                        return@launch
                     }
                 }
 
@@ -312,13 +424,20 @@ class BackupApp(
 
                 val internalDataFolder = File(tempExtract, "internal_data")
                 if (internalDataFolder.exists()) {
-                    ShellFunctions.executePrivileged("cp -r \"${internalDataFolder.absolutePath}/.\" \"/data/data/$packageName/\"")
+                    if (ShizukuHelper.isRootAvailable()) {
+                        ShellFunctions.executePrivileged("cp -r \"${internalDataFolder.absolutePath}/.\" \"/data/data/$packageName/\"")
+                    } else {
+                        android.util.Log.w("BackupApp", "Restauração de /data/data/$packageName requer Root (Superusuário). Shizuku em modo ADB não tem permissão para gravar na pasta privada de outros apps.")
+                    }
                 }
 
                 tempExtract.deleteRecursively()
 
                 withContext(Dispatchers.Main) {
-                    onResult(true, "Restauração do backup concluída com sucesso!")
+                    val rootNotice = if (internalDataFolder.exists() && !ShizukuHelper.isRootAvailable()) {
+                        "\n⚠️ Aviso: Dados internos de /data/data requerem Root para restauração completa."
+                    } else ""
+                    onResult(true, "Restauração do backup concluída com sucesso!$rootNotice")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -352,20 +471,35 @@ class BackupApp(
                 val tempExtract = File(context.cacheDir, "restore_${System.currentTimeMillis()}")
                 tempExtract.mkdirs()
 
-                if (backupFile.name.endsWith(".zip")) {
-                    ShellFunctions.executePrivileged("unzip -q -o \"${backupFile.absolutePath}\" -d \"${tempExtract.absolutePath}\"")
+                if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                    extractZip(backupFile, tempExtract)
                 } else if (backupFile.isDirectory) {
-                    ShellFunctions.executePrivileged("cp -r \"${backupFile.absolutePath}/.\" \"${tempExtract.absolutePath}/\"")
+                    backupFile.walkTopDown().forEach { file ->
+                        if (file.isFile) {
+                            val rel = file.relativeTo(backupFile).path
+                            val dest = File(tempExtract, rel)
+                            dest.parentFile?.mkdirs()
+                            file.copyTo(dest, overwrite = true)
+                        }
+                    }
                 }
 
                 if (restoreApk) {
                     val apks = tempExtract.listFiles { f -> f.name.endsWith(".apk") } ?: emptyArray()
-                    if (apks.isNotEmpty()) {
-                        if (apks.size == 1) {
-                            ShellFunctions.executePrivileged("pm install -r \"${apks[0].absolutePath}\"")
-                        } else {
-                            val allApkPaths = apks.joinToString(" ") { "\"${it.absolutePath}\"" }
-                            ShellFunctions.executePrivileged("pm install-multiple -r $allApkPaths")
+                    val effectiveApks = if (apks.isEmpty() && backupFile.isFile) {
+                        val sibling = File(backupFile.parentFile, backupFile.nameWithoutExtension + ".apk")
+                        if (sibling.exists()) arrayOf(sibling) else emptyArray()
+                    } else apks
+
+                    if (effectiveApks.isNotEmpty()) {
+                        val (success, installOut) = installApkFiles(effectiveApks)
+                        if (!success) {
+                            tempExtract.deleteRecursively()
+                            val err = ApkInstallerManager.translateInstallError(installOut, "pm install")
+                            withContext(Dispatchers.Main) {
+                                onResult(false, "Falha na instalação do APK durante a restauração:\n$err")
+                            }
+                            return@launch
                         }
                     }
                 }
@@ -386,14 +520,18 @@ class BackupApp(
                     }
                     val internalDataFolder = File(tempExtract, "internal_data")
                     if (internalDataFolder.exists()) {
-                        ShellFunctions.executePrivileged("cp -r \"${internalDataFolder.absolutePath}/.\" \"/data/data/$packageName/\"")
+                        if (ShizukuHelper.isRootAvailable()) {
+                            ShellFunctions.executePrivileged("cp -r \"${internalDataFolder.absolutePath}/.\" \"/data/data/$packageName/\"")
+                        } else {
+                            android.util.Log.w("BackupApp", "Restauração de /data/data/$packageName requer Root (Superusuário).")
+                        }
                     }
                 }
 
                 tempExtract.deleteRecursively()
 
                 withContext(Dispatchers.Main) {
-                    onResult(true, "Restauração concluída com sucesso!")
+                    onResult(true, "Restauração seletiva concluída com sucesso!")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -473,30 +611,41 @@ class BackupApp(
     fun reinstallApkFromBackup(backupFile: File, packageName: String, onResult: (Boolean, String) -> Unit) {
         scope.launch(Dispatchers.IO) {
             try {
-                val tempExtract = File(context.cacheDir, "reinstall_${System.currentTimeMillis()}")
-                tempExtract.mkdirs()
+                // 1. Se o backup selecionado for um .zip, verificar se existe o .apk correspondente fora do zip na mesma pasta
+                val standaloneApk = if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                    val candidate = File(backupFile.parentFile, backupFile.nameWithoutExtension + ".apk")
+                    if (candidate.exists()) candidate else null
+                } else if (backupFile.name.endsWith(".apk", ignoreCase = true)) {
+                    backupFile
+                } else null
 
-                if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
-                    java.util.zip.ZipFile(backupFile).use { zip ->
-                        for (entry in zip.entries().asSequence()) {
-                            if (entry.name.endsWith(".apk", ignoreCase = true)) {
-                                val outFile = File(tempExtract, File(entry.name).name)
-                                zip.getInputStream(entry).use { inS ->
-                                    outFile.outputStream().use { outS -> inS.copyTo(outS) }
+                val apksToInstall: Array<File>
+                val tempExtract = File(context.cacheDir, "reinstall_${System.currentTimeMillis()}")
+
+                if (standaloneApk != null) {
+                    apksToInstall = arrayOf(standaloneApk)
+                } else {
+                    tempExtract.mkdirs()
+                    if (backupFile.name.endsWith(".zip", ignoreCase = true)) {
+                        java.util.zip.ZipFile(backupFile).use { zip ->
+                            for (entry in zip.entries().asSequence()) {
+                                if (entry.name.endsWith(".apk", ignoreCase = true)) {
+                                    val outFile = File(tempExtract, File(entry.name).name)
+                                    zip.getInputStream(entry).use { inS ->
+                                        outFile.outputStream().use { outS -> inS.copyTo(outS) }
+                                    }
                                 }
                             }
                         }
+                    } else if (backupFile.isDirectory) {
+                        backupFile.walkTopDown().filter { it.isFile && it.name.endsWith(".apk", ignoreCase = true) }.forEach {
+                            it.copyTo(File(tempExtract, it.name), overwrite = true)
+                        }
                     }
-                } else if (backupFile.name.endsWith(".apk", ignoreCase = true)) {
-                    backupFile.copyTo(File(tempExtract, backupFile.name), overwrite = true)
-                } else if (backupFile.isDirectory) {
-                    backupFile.walkTopDown().filter { it.isFile && it.name.endsWith(".apk", ignoreCase = true) }.forEach {
-                        it.copyTo(File(tempExtract, it.name), overwrite = true)
-                    }
+                    apksToInstall = tempExtract.listFiles { f -> f.name.endsWith(".apk", ignoreCase = true) } ?: emptyArray()
                 }
 
-                val apks = tempExtract.listFiles { f -> f.name.endsWith(".apk", ignoreCase = true) } ?: emptyArray()
-                if (apks.isEmpty()) {
+                if (apksToInstall.isEmpty()) {
                     tempExtract.deleteRecursively()
                     withContext(Dispatchers.Main) {
                         onResult(false, "Nenhum arquivo APK encontrado dentro deste backup.")
@@ -506,25 +655,20 @@ class BackupApp(
 
                 val hasPriv = ShizukuHelper.hasPermission() || ShizukuHelper.isRootAvailable()
                 if (hasPriv) {
-                    val cmd = if (apks.size == 1) {
-                        "pm install -r \"${apks[0].absolutePath}\""
-                    } else {
-                        val paths = apks.joinToString(" ") { "\"${it.absolutePath}\"" }
-                        "pm install-multiple -r $paths"
-                    }
-                    val output = ShellFunctions.executePrivileged(cmd).trim()
+                    val (success, out) = installApkFiles(apksToInstall)
                     tempExtract.deleteRecursively()
 
                     withContext(Dispatchers.Main) {
-                        if (output.contains("Success", ignoreCase = true)) {
+                        if (success) {
                             onResult(true, "APK reinstalado com sucesso pelo PackageManager!")
                         } else {
-                            onResult(false, "Falha na reinstalação: $output")
+                            val err = ApkInstallerManager.translateInstallError(out, "pm install")
+                            onResult(false, "Falha na reinstalação:\n$err")
                         }
                     }
                 } else {
                     // Sem privilégios, abre intent de instalação padrão com o primeiro APK
-                    val baseApk = apks[0]
+                    val baseApk = apksToInstall[0]
                     val apkUri = androidx.core.content.FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",

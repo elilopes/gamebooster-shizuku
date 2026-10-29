@@ -1472,4 +1472,21 @@ object ShizukuHelper {
             false
         }
     }
+
+    /**
+     * [PT-BR] Executa um novo processo privilegiado através da API do Shizuku com suporte a stdin/stdout/stderr.
+     * Permite streaming direto de arquivos e APKs via processo com privilégios de Shell/ADB.
+     *
+     * [EN] Executes a new privileged process via Shizuku API with full stdin/stdout/stderr support.
+     * Enables direct streaming of files and APKs via privileged Shell/ADB process.
+     */
+    fun newProcess(vararg cmd: String): Process {
+        val m = Class.forName("rikka.shizuku.Shizuku").getDeclaredMethod(
+            "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java
+        )
+        m.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return m.invoke(null, arrayOf(*cmd), null, null) as Process
+    }
 }
+

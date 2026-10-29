@@ -246,6 +246,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     val context = LocalContext.current
     val thermalMonitorEnabled by viewModel.thermalMonitorEnabled.collectAsState()
     val fpsAnalyticsEnabled by viewModel.fpsAnalyticsEnabled.collectAsState()
+    val networkEnabled by viewModel.networkMonitorEnabled.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -265,10 +266,10 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     val thermalTitle = stringResource(id = R.string.tab_thermal_monitor)
     val fpsTitle = stringResource(id = R.string.tab_fps_metrics)
 
-    val tabs = remember(thermalMonitorEnabled, fpsAnalyticsEnabled) {
+    val tabs = remember(thermalMonitorEnabled, fpsAnalyticsEnabled, networkEnabled) {
         mutableListOf<String>().apply {
             if (thermalMonitorEnabled) add(thermalTitle)
-            if (fpsAnalyticsEnabled) add(fpsTitle)
+            if (fpsAnalyticsEnabled || networkEnabled) add(fpsTitle)
             addAll(baseTabs)
         }
     }
@@ -280,6 +281,7 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showHardwareDialog by remember { mutableStateOf(false) }
     var showLogsDialog by remember { mutableStateOf(false) }
+    var showBloatwareDialog by remember { mutableStateOf(false) }
     var hardwareReportText by remember { mutableStateOf("") }
 
     val shizukuAlert by ShizukuHelper.shizukuAlert.collectAsState()
@@ -373,7 +375,6 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                             selectedTabIndex = 0
                         }
                     )
-                    val networkEnabled by viewModel.networkMonitorEnabled.collectAsState()
                     DropdownMenuItem(
                         text = {
                             Text(if (networkEnabled) "Desativar Monitor de Rede (TCP)" else "Ativar Monitor de Rede (TCP)")
@@ -388,6 +389,13 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
                         onClick = {
                             val msg = SystemStateRecoveryHelper.restoreSystemState(context)
                             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("🗑️ Gerenciar Bloatware") },
+                        onClick = {
+                            showBloatwareDialog = true
                             showMenu = false
                         }
                     )
@@ -727,6 +735,10 @@ fun MainScreen(viewModel: GameViewModel = viewModel()) {
 
     if (showLogsDialog) {
         LogsDialog(onDismiss = { showLogsDialog = false })
+    }
+
+    if (showBloatwareDialog) {
+        BloatwareManagerDialog(onDismiss = { showBloatwareDialog = false })
     }
 }
 
@@ -1932,8 +1944,24 @@ fun GameListTab(viewModel: GameViewModel) {
 
     if (showManualAddDialog) {
         var appSearchQuery by remember { mutableStateOf("") }
-        val installedApps = remember(appSearchQuery, showManualAddDialog) {
-            viewModel.getInstalledApps(appSearchQuery)
+        val cachedApps by viewModel.cachedInstalledApps.collectAsState()
+        
+        val filteredApps = remember(appSearchQuery, cachedApps) {
+            val list = if (appSearchQuery.isEmpty()) cachedApps else {
+                cachedApps.filter { it.appName.contains(appSearchQuery, ignoreCase = true) || it.packageName.contains(appSearchQuery, ignoreCase = true) }
+            }
+            list.map { appEntity ->
+                val isAdded = games.any { it.packageName == appEntity.packageName }
+                // Reconstruir o AppItemInfo (simplificado pois não temos fácil acesso a versionName no cache)
+                AppItemInfo(
+                    packageName = appEntity.packageName,
+                    name = appEntity.appName,
+                    versionName = "", 
+                    isGame = appEntity.isGame,
+                    isAlreadyAdded = isAdded,
+                    engine = GfxTools.EngineType.valueOf(appEntity.engine)
+                )
+            }
         }
 
         AlertDialog(
@@ -1971,20 +1999,20 @@ fun GameListTab(viewModel: GameViewModel) {
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                     )
 
-                    if (installedApps.isEmpty()) {
+                    if (filteredApps.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = stringResource(id = R.string.no_apps_found),
+                                text = "Nenhum aplicativo encontrado.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                            items(installedApps, key = { it.packageName }) { appItem ->
+                            items(filteredApps, key = { it.packageName }) { appItem ->
                                 val isAlreadyAdded = games.any { it.packageName == appItem.packageName }
                                 Card(
                                     modifier = Modifier
@@ -3415,6 +3443,7 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
     val forceSystemGraphicsDriver by viewModel.forceSystemGraphicsDriver.collectAsState()
     val webViewGameBoost by viewModel.webViewGameBoost.collectAsState()
     val disable4xMsaa by viewModel.disable4xMsaa.collectAsState()
+    val networkOptimizationEnabled by viewModel.networkOptimizationEnabled.collectAsState()
 
     var showInfoDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showVmDialog by remember { mutableStateOf(false) }
@@ -3457,6 +3486,18 @@ fun BoostSettingsTab(viewModel: GameViewModel) {
             onCheckedChange = { viewModel.toggleDisable4xMsaa(it) },
             titleRes = R.string.boost_disable_4x_msaa_title,
             descRes = R.string.boost_disable_4x_msaa_desc,
+            onInfoClick = { showInfoDialog = it }
+        )
+        SettingItem(
+            title = stringResource(id = R.string.boost_network_opt_title),
+            checked = networkOptimizationEnabled,
+            onCheckedChange = {
+                viewModel.toggleNetworkOptimization(it) { success, msg ->
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
+            },
+            titleRes = R.string.boost_network_opt_title,
+            descRes = R.string.boost_network_opt_desc,
             onInfoClick = { showInfoDialog = it }
         )
 

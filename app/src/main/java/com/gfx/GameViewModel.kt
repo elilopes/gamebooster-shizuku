@@ -18,6 +18,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.os.Environment
@@ -51,9 +53,10 @@ data class AppItemInfo(
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val packageManager = application.packageManager
-    private val db = androidx.room.Room.databaseBuilder(application, AppDatabase::class.java, "boost-db")
-        .fallbackToDestructiveMigration(dropAllTables = true)
-        .build()
+    private val db = AppDatabase.getInstance(application)
+    private val installedAppRepository = com.gfx.data.InstalledAppRepository(application, db.installedAppDao())
+    val cachedInstalledApps = installedAppRepository.allApps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val boostPrefs = application.getSharedPreferences("boost_settings_prefs", Context.MODE_PRIVATE)
     private val manualGamesPrefs = application.getSharedPreferences("manual_games_prefs", Context.MODE_PRIVATE)
 
@@ -120,6 +123,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // Network Latency & Jitter Monitor (TCP sem privilégios)
     val networkMonitorEnabled = MutableStateFlow(boostPrefs.getBoolean("networkMonitorEnabled", false))
     val networkLatencyState = NetworkLatencyMonitor.latencyState
+    val networkOptimizationEnabled = MutableStateFlow(boostPrefs.getBoolean("networkOptimizationEnabled", false))
 
     fun toggleNetworkMonitor(enabled: Boolean) {
         networkMonitorEnabled.value = enabled
@@ -128,6 +132,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             NetworkLatencyMonitor.startMonitoring()
         } else {
             NetworkLatencyMonitor.stopMonitoring()
+        }
+    }
+
+    fun toggleNetworkOptimization(enabled: Boolean, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            networkOptimizationEnabled.value = enabled
+            boostPrefs.edit().putBoolean("networkOptimizationEnabled", enabled).apply()
+            val msg = NetworkOptimizer.applyOptimizations(enabled)
+            onResult(enabled, msg)
         }
     }
 

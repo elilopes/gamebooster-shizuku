@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -752,13 +753,16 @@ fun DetailedApkInstallerDialog(
                                     Card(modifier = Modifier.fillMaxWidth()) {
                                         Column(modifier = Modifier.padding(10.dp)) {
                                             Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { showLogcatPanel = !showLogcatPanel },
+                                                modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clickable { showLogcatPanel = !showLogcatPanel }
+                                                ) {
                                                     Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Text(
@@ -767,14 +771,74 @@ fun DetailedApkInstallerDialog(
                                                         fontWeight = FontWeight.Bold
                                                     )
                                                 }
-                                                Icon(
-                                                    imageVector = if (showLogcatPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null
-                                                )
+
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            val fullLog = logcatLogs.joinToString("\n")
+                                                            if (fullLog.isNotBlank()) {
+                                                                clipboardManager.setText(AnnotatedString(fullLog))
+                                                                Toast.makeText(context, "Logs do PackageManager copiados!", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Nenhum log para copiar.", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(32.dp).testTag("copy_logcat_button")
+                                                    ) {
+                                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copiar logs", modifier = Modifier.size(16.dp))
+                                                    }
+                                                    IconButton(
+                                                        onClick = { showLogcatPanel = !showLogcatPanel },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (showLogcatPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                            contentDescription = "Expandir/Recolher"
+                                                        )
+                                                    }
+                                                }
                                             }
 
                                             AnimatedVisibility(visible = showLogcatPanel) {
                                                 Column(modifier = Modifier.padding(top = 8.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "${logcatLogs.size} linha(s) de registro",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        Row {
+                                                            TextButton(
+                                                                onClick = {
+                                                                    val fullLog = logcatLogs.joinToString("\n")
+                                                                    if (fullLog.isNotBlank()) {
+                                                                        clipboardManager.setText(AnnotatedString(fullLog))
+                                                                        Toast.makeText(context, "Logs copiados para a área de transferência!", Toast.LENGTH_SHORT).show()
+                                                                    } else {
+                                                                        Toast.makeText(context, "Nenhum log para copiar.", Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                },
+                                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text("Copiar Log", fontSize = 11.sp)
+                                                            }
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            TextButton(
+                                                                onClick = { ApkInstallerManager.clearInstallerLogs() },
+                                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text("Limpar", fontSize = 11.sp)
+                                                            }
+                                                        }
+                                                    }
                                                     Surface(
                                                         modifier = Modifier
                                                             .fillMaxWidth()

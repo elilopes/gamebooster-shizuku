@@ -232,10 +232,9 @@ fun BackupAppTab(viewModel: GameViewModel) {
                             exportApkLauncher.launch(suggestedApkName)
                         },
                         onReinstallApk = { toReinstall ->
-                            backupManager.reinstallApkFromBackup(toReinstall, packageName) { success, msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                loadBackups()
-                            }
+                            selectedInstallerFile = toReinstall
+                            selectedInstallerUri = null
+                            showInstallerDialog = true
                         },
                         onDetailedInstall = { targetFile ->
                             selectedInstallerFile = targetFile
@@ -343,29 +342,15 @@ fun BackupItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Botão Reinstalar APK e Botão de Instalação Detalhada
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Botão Reinstalar APK unificado (sempre executa a instalação detalhada com monitoramento do logcat)
+            Button(
+                onClick = { onDetailedInstall(file) },
+                modifier = Modifier.fillMaxWidth().testTag("reinstall_apk_${file.name}"),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Button(
-                    onClick = { onReinstallApk(file) },
-                    modifier = Modifier.weight(1f).testTag("reinstall_apk_${file.name}"),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Reinstalar APK", style = MaterialTheme.typography.labelMedium)
-                }
-
-                FilledTonalButton(
-                    onClick = { onDetailedInstall(file) },
-                    modifier = Modifier.weight(1.2f).testTag("detailed_install_${file.name}")
-                ) {
-                    Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Instalar Detalhado", style = MaterialTheme.typography.labelMedium)
-                }
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Reinstalar APK (Instalação Detalhada)", style = MaterialTheme.typography.labelMedium)
             }
 
             Spacer(modifier = Modifier.height(6.dp))

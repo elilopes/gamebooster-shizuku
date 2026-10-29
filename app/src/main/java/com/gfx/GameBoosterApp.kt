@@ -2,24 +2,29 @@ package com.gfx
 
 import android.app.Application
 import android.util.Log
+import com.gfx.data.AppDatabase
+import com.gfx.data.InstalledAppRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-/**
- * [PT-BR] Classe Application principal do aplicativo Game Booster.
- *         Inicializa o gerenciador global de relatórios de falha (CrashReporterHelper) e configurações de diagnóstico.
- *
- * [EN]    Main Application class for the Game Booster app.
- *         Initializes the global crash reporting manager (CrashReporterHelper) and diagnostic settings.
- */
 class GameBoosterApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
         try {
-            // Inicializa captura global de erros, crashes e geração de Bug Reports
             CrashReporterHelper.init(this)
-            Log.d("GameBoosterApp", "GameBoosterApp inicializado com proteção global contra falhas.")
+            
+            // Sincronização em background dos apps instalados
+            val db = AppDatabase.getInstance(this)
+            val repository = InstalledAppRepository(this, db.installedAppDao())
+            CoroutineScope(Dispatchers.IO).launch {
+                repository.syncApps()
+            }
+            
+            Log.d("GameBoosterApp", "GameBoosterApp inicializado. Sincronização de apps iniciada.")
         } catch (e: Exception) {
-            Log.e("GameBoosterApp", "Erro ao inicializar CrashReporterHelper: ${e.message}", e)
+            Log.e("GameBoosterApp", "Erro ao inicializar: ${e.message}", e)
         }
     }
 }

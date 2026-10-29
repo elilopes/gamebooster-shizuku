@@ -443,4 +443,6 @@
     <string name="game_action_export_success">Config exported to Downloads/%s</string>
     <string name="game_action_import_success">Config imported and applied successfully!</string>
     <string name="game_action_import_error">Failed to import config: %s</string>
+    <string name="boost_network_opt_title">Optimize Network (TCP/DNS)</string>
+    <string name="boost_network_opt_desc">Tunes TCP buffers and forces low-latency DNS (1.1.1.1) to improve ping stability and reduce jitter in online games.</string>
 </resources>

@@ -309,6 +309,8 @@
     <string name="shizuku_test_11">11. Gerenciadores Root</string>
 
     
+    <string name="scripts_header_desc">Adicione novas funções ao app através de scripts shell (.sh)</string>
+    <string name="scripts_btn_new_function">Nova Função</string>
     <string name="scripts_add_new">Nova Função</string>
     <string name="scripts_restore_defaults">Restaurar Padrões</string>
     <string name="scripts_restore_defaults_toast">Presets padrão restaurados!</string>

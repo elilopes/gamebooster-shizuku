@@ -309,6 +309,8 @@
     <string name="shizuku_test_11">11. Root Managers</string>
 
     
+    <string name="scripts_header_desc">Add new functions to the app through custom shell scripts (.sh)</string>
+    <string name="scripts_btn_new_function">New Function</string>
     <string name="scripts_add_new">New Function</string>
     <string name="scripts_restore_defaults">Restore Defaults</string>
     <string name="scripts_restore_defaults_toast">Default presets restored!</string>

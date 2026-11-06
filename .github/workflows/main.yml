@@ -84,20 +84,30 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      - name: Prepare Pages Directory
+        run: |
+          mkdir -p public
+          echo '<!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <title>GFX Game Booster - Shizuku</title>
+              <style>
+                  body { font-family: sans-serif; text-align: center; padding: 50px; background: #121212; color: #fff; }
+                  a { color: #4CAF50; text-decoration: none; font-weight: bold; }
+                  .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 GFX Game Booster (Shizuku)</h1>
+                  <p>O aplicativo oficial para otimização de jogos via Shizuku.</p>
+                  <p>Baixe a versão mais recente diretamente na aba de <a href="https://github.com/elilopes/gamebooster-shizuku/releases">Releases do GitHub</a>.</p>
+              </div>
+          </body>
+          </html>' > public/index.html
+
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          path: 'public'  # ✅ Aponta apenas para a pasta limpa com o site estático

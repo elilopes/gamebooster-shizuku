@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GFX Game Booster & System Optimizer - Shizuku</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        darkBg: '#0f172a',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Language Bar -->
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-slate-950/80 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-gamepad text-xl"></i>
+                </div>
+                <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                    GFX Game Booster
+                </span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <div class="inline-flex rounded-lg p-1 bg-slate-900 border border-slate-700">
+                    <button onclick="setLanguage('en')" id="btn-en" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-indigo-600 text-white shadow">
+                        English
+                    </button>
+                    <button onclick="setLanguage('pt')" id="btn-pt" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">
+                        Português
+                    </button>
+                </div>
+                <a href="https://github.com/elilopes/gamebooster-shizuku" target="_blank" class="hidden sm:inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fa-brands fa-github text-lg"></i>
+                    <span>GitHub</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden py-20 lg:py-32 border-b border-slate-800">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/30 via-slate-900/10 to-transparent pointer-events-none"></div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            
+            <!-- EN Content -->
+            <div class="lang-en space-y-6">
+                <span class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
+                    <i class="fa-solid fa-bolt text-xs"></i>
+                    <span>Advanced Android Performance & Shizuku Tool</span>
+                </span>
+                <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto">
+                    Supercharge Your Gaming & System Performance
+                </h1>
+                <p class="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+                    An advanced Android application built with Kotlin & Jetpack Compose. Leverage Shizuku privileges for CPU/GPU max frequency, TCP network tuning, live package installer logging, and high FPS telemetry.
+                </p>
+                <div class="flex flex-wrap justify-center gap-4 pt-4">
+                    <a href="https://github.com/elilopes/gamebooster-shizuku/releases" target="_blank" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download APK Releases</span>
+                    </a>
+                    <a href="#features" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold px-6 py-3 rounded-xl transition-all">
+                        Explore Features
+                    </a>
+                </div>
+            </div>
+
+            <!-- PT Content -->
+            <div class="lang-pt space-y-6 hidden">
+                <span class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
+                    <i class="fa-solid fa-bolt text-xs"></i>
+                    <span>Ferramenta Avançada de Desempenho e Shizuku para Android</span>
+                </span>
+                <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto">
+                    Potencialize Seus Jogos e o Desempenho do Sistema
+                </h1>
+                <p class="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+                    Aplicativo Android avançado desenvolvido em Kotlin & Jetpack Compose. Utilize privilégios do Shizuku para máxima frequência de CPU/GPU, ajustes de rede TCP, logcat de instalação de pacotes ao vivo e telemetria de FPS.
+                </p>
+                <div class="flex flex-wrap justify-center gap-4 pt-4">
+                    <a href="https://github.com/elilopes/gamebooster-shizuku/releases" target="_blank" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Baixar APK (Releases)</span>
+                    </a>
+                    <a href="#features" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold px-6 py-3 rounded-xl transition-all">
+                        Explorar Funções
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- GitHub APK Compilation Info Banner -->
+    <section class="py-12 bg-slate-950 border-b border-slate-800">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 sm:p-8 shadow-xl">
+                
+                <!-- EN -->
+                <div class="lang-en space-y-3">
+                    <div class="flex items-center space-x-3 text-indigo-400 font-bold text-lg">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <h3>Does GitHub compile source code into downloadable APKs?</h3>
+                    </div>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        By default, GitHub repositories store source code and require a CI/CD pipeline (like <strong>GitHub Actions</strong> configured with Android Gradle build workflows) to automatically compile APKs upon every push or release. If configured in the repository, you can download the built APK directly from the <strong>Releases</strong> or <strong>Actions</strong> tab on GitHub.
+                    </p>
+                </div>
+
+                <!-- PT -->
+                <div class="lang-pt space-y-3 hidden">
+                    <div class="flex items-center space-x-3 text-indigo-400 font-bold text-lg">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <h3>O GitHub faz a compilação do código em APK para baixar?</h3>
+                    </div>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        Por padrão, os repositórios do GitHub armazenam código-fonte e exigem um pipeline de CI/CD (como o <strong>GitHub Actions</strong> configurado com workflows de build Gradle do Android) para compilar APKs automaticamente a cada commit ou lançamento. Se configurado no repositório, você pode baixar o APK compilado diretamente na aba <strong>Releases</strong> ou <strong>Actions</strong> do GitHub.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-slate-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            
+            <div class="text-center max-w-3xl mx-auto mb-16">
+                <!-- EN -->
+                <div class="lang-en">
+                    <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Core Features & Capabilities</h2>
+                    <p class="mt-4 text-slate-400">Discover all the advanced tools packed into GFX Game Booster.</p>
+                </div>
+                <!-- PT -->
+                <div class="lang-pt hidden">
+                    <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Principais Funcionalidades</h2>
+                    <p class="mt-4 text-slate-400">Descubra todas as ferramentas avançadas integradas ao GFX Game Booster.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                
+                <!-- Feature 1 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-database"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Room Database & Game List</h3>
+                        <p class="text-sm text-slate-400">Persistent local storage for custom games with instant search, background scanning, and web version update checks.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Banco Room & Lista de Jogos</h3>
+                        <p class="text-sm text-slate-400">Armazenamento local persistente para jogos com busca instantânea, escaneamento em segundo plano e checagem de atualizações web.</p>
+                    </div>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-box-archive"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Detailed APK Installer</h3>
+                        <p class="text-sm text-slate-400">Live PackageManager logcat, step-by-step installation progress, split APK handling, and user-friendly error diagnostics.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Instalador Detalhado de APK</h3>
+                        <p class="text-sm text-slate-400">Logcat do PackageManager ao vivo, progresso passo a passo, suporte a APKs split e diagnóstico amigável de erros.</p>
+                    </div>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-wifi"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Network Latency & TCP Monitor</h3>
+                        <p class="text-sm text-slate-400">Real-time TCP ping probes (Cloudflare, Google, Steam), jitter monitoring, TCP buffer tuning, and Cloudflare DNS routing.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Monitor TCP e Latência de Rede</h3>
+                        <p class="text-sm text-slate-400">Testes de ping TCP em tempo real, monitoramento de jitter, ajuste de buffers TCP e forçamento de DNS da Cloudflare.</p>
+                    </div>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-gauge-high"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Advanced Boost Settings</h3>
+                        <p class="text-sm text-slate-400">Thermal throttling disabler, hardware overlay killer, OOM immortal priority, max CPU/GPU clocks, and Native Game Mode.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Configurações Avançadas de Boost</h3>
+                        <p class="text-sm text-slate-400">Desativação de limite térmico e overlays, proteção OOM, frequências máximas de CPU/GPU e Modo de Jogo Nativo.</p>
+                    </div>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Backup, Restore & Bloatware</h3>
+                        <p class="text-sm text-slate-400">Backup and restore APK, OBB, and Data folders with compression and SAF export. Bloatware manager to remove system bloat safely.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Backup, Restauração e Bloatware</h3>
+                        <p class="text-sm text-slate-400">Backup e restauração de APK, OBB e Dados com compactação ZIP e SAF. Gerenciador de bloatware para remoção segura de apps.</p>
+                    </div>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all">
+                    <div class="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 text-xl">
+                        <i class="fa-solid fa-terminal"></i>
+                    </div>
+                    <div class="lang-en">
+                        <h3 class="text-lg font-bold text-white mb-2">Shell Scripts & SetEdit</h3>
+                        <p class="text-sm text-slate-400">Create and run custom .sh scripts with Shizuku privileges. SetEdit table editor for global, system, and secure Android variables.</p>
+                    </div>
+                    <div class="lang-pt hidden">
+                        <h3 class="text-lg font-bold text-white mb-2">Scripts Shell e SetEdit</h3>
+                        <p class="text-sm text-slate-400">Crie e execute scripts .sh com Shizuku. Editor SetEdit para modificar variáveis globais, de sistema e seguras do Android.</p>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-8 text-center text-sm text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
+            <p class="lang-en">GFX Game Booster & System Optimizer — Powered by Kotlin, Jetpack Compose & Shizuku.</p>
+            <p class="lang-pt hidden">GFX Game Booster & System Optimizer — Desenvolvido com Kotlin, Jetpack Compose & Shizuku.</p>
+            <p>
+                <a href="https://github.com/elilopes/gamebooster-shizuku" target="_blank" class="text-indigo-400 hover:underline">GitHub Repository</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Language Toggle Script -->
+    <script>
+        function setLanguage(lang) {
+            const enElements = document.querySelectorAll('.lang-en');
+            const ptElements = document.querySelectorAll('.lang-pt');
+            const btnEn = document.getElementById('btn-en');
+            const btnPt = document.getElementById('btn-pt');
+
+            if (lang === 'en') {
+                enElements.forEach(el => el.classList.remove('hidden'));
+                ptElements.forEach(el => el.classList.add('hidden'));
+                btnEn.className = "px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-indigo-600 text-white shadow";
+                btnPt.className = "px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white";
+                localStorage.setItem('preferred_lang', 'en');
+            } else {
+                enElements.forEach(el => el.classList.add('hidden'));
+                ptElements.forEach(el => el.classList.remove('hidden'));
+                btnPt.className = "px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-indigo-600 text-white shadow";
+                btnEn.className = "px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white";
+                localStorage.setItem('preferred_lang', 'pt');
+            }
+        }
+
+        // Load saved language preference or default to EN
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('preferred_lang') || 'en';
+            setLanguage(saved);
+        });
+    </script>
+</body>
+</html>

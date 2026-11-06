@@ -55,7 +55,7 @@ jobs:
         env:
           STORE_PASSWORD: "android"
           KEY_PASSWORD: "android"
-        run: ./gradlew assembleRelease -x lintVitalRelease
+        run: ./gradlew assembleRelease
         continue-on-error: true
 
       - name: Upload Debug APK Artifact
